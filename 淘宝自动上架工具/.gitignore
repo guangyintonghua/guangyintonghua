@@ -1,0 +1,27 @@
+# 运行时生成
+__pycache__/
+*.pyc
+*.pyo
+logs/
+screenshots/
+data/task_state.json
+data/上架报告_*.xlsx
+data/*.xlsx
+
+# Chrome 配置文件（巨大且含个人 Cookie）
+profiles/
+
+# 构建产物
+*.exe
+build/
+dist/
+*.spec
+
+# 临时调试文件
+*.png
+test_output_*.log
+assets/_preview.png
+assets/_gen_icon.py
+
+# 产品素材（本地数据）
+趣味印花桌布/

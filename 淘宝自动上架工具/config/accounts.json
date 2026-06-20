@@ -1,0 +1,21 @@
+{
+  "_comment": "多店铺账号配置，每个账号对应独立 Chrome Profile（Cookie 隔离）",
+  "accounts": [
+    {
+      "name":        "shop_01",
+      "label":       "主店铺",
+      "daily_limit": 40,
+      "shipping_tpl_map": {
+        "全国包邮": "全国包邮"
+      }
+    },
+    {
+      "name":        "shop_02",
+      "label":       "副店铺",
+      "daily_limit": 40,
+      "shipping_tpl_map": {
+        "全国包邮": "默认运费模板"
+      }
+    }
+  ]
+}

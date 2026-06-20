@@ -1,0 +1,5 @@
+{
+  "_comment": "工具全局配置",
+  "browser_mode": "existing",
+  "debug_port": 9222
+}

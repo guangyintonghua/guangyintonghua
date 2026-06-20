@@ -1,0 +1,64 @@
+{
+  "_comment": "淘宝发布 v2 版 (item.upload.taobao.com) 选择器配置。页面改版时只需更新此文件。",
+  "_last_verified": "2026-06-12",
+
+  "publish_url": "https://item.upload.taobao.com/sell/v2/publish.htm?catId={cat_id}",
+
+  "_note_react": "v2 表单基于 React，fill()/type() 不触发 onChange，必须使用 execCommand('insertText')",
+
+  "title": {
+    "_comment": "宝贝标题输入框，限 30个汉字/60字符",
+    "input": "input[placeholder*='30个汉字'], input[placeholder*='60字符']"
+  },
+
+  "images": {
+    "_comment": "主图上传区（1:1）和详情图上传触发器",
+    "main_upload_slot":   ".upload-list-item:not(.has-img), [class*='upload-item']:has([class*='upload-trigger'])",
+    "detail_image_btn":   "[class*='detail'] [class*='img-upload'], [class*='module-list'] [class*='img']",
+    "file_chooser_trigger": "[class*='upload-trigger'], [class*='upload-btn'], div:has(> img[src*='upload'])"
+  },
+
+  "attributes": {
+    "_comment": "商品属性区域（基础信息 section）",
+    "prop_area":       "[class*='prop-item'], [class*='attribute-item']",
+    "select_combo":    "input[role='combobox']",
+    "input_combo":     "input[placeholder*='请输入']",
+    "overlay_popup":   "[class*='overlay']:visible, [class*='select-popup']:visible",
+    "overlay_option":  "li[class*='option'], [class*='option-item'], [class*='select-item']"
+  },
+
+  "sku": {
+    "_comment": "销售规格：v2 版使用「编辑规格」对话框 + 内联表格",
+    "edit_btn":        "button:has-text('编辑规格')",
+    "dialog":          "[class*='spec-dialog'], [role='dialog']",
+    "spec_area":       "[class*='spec-section'], [class*='prop-section']",
+    "blank_area":      "[class*='spec-blank'], [class*='prop-blank']",
+    "add_btn":         "button[class*='add'], span[class*='add'], button:has-text('+')",
+    "spec_input":      "input[class*='spec-input'], input[placeholder*='输入规格']",
+    "confirm_btn":     "button:has-text('确认'), button:has-text('确定'), button:has-text('完成')",
+    "table":           "[class*='sku-table'] table, [class*='sku-list'] table",
+    "price_input":     "input[placeholder*='价格']",
+    "stock_input":     "input[placeholder*='数量']"
+  },
+
+  "shipping": {
+    "_comment": "运费模板自定义 combobox，非原生 <select>",
+    "tpl_area":        "div:has-text('运费模板'), [class*='freight'], [class*='postage']",
+    "tpl_combo":       "input[role='combobox']",
+    "tpl_overlay":     "[class*='overlay']:visible",
+    "delivery_radio":  "[role='radio']"
+  },
+
+  "multi_discount": {
+    "_comment": "多件优惠，v2 新增必填项",
+    "area":            "div:has-text('多件优惠'), [class*='discount']",
+    "enable_checkbox": "[role='checkbox']:has-text('启用'), input[type='checkbox']",
+    "type_combo":      "input[role='combobox']",
+    "rate_input":      "input[placeholder*='9'], input[type='text']:last-child"
+  },
+
+  "submit": {
+    "btn":             "button:has-text('提交宝贝信息'), button:has-text('发布宝贝')",
+    "success_url_re":  "success\\.htm.*primaryId=(\\d{10,})"
+  }
+}
