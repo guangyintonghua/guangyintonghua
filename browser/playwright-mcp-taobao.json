@@ -1,0 +1,41 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "userDataDir": "E:/AI工具/淘宝店运营流/browser/profile-taobao",
+    "launchOptions": {
+      "executablePath": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+      "headless": false,
+      "args": [
+        "--no-proxy-server",
+        "--disk-cache-dir=E:/AI工具/淘宝店运营流/browser/cache-taobao",
+        "--no-first-run",
+        "--no-default-browser-check"
+      ]
+    },
+    "contextOptions": {
+      "acceptDownloads": true,
+      "viewport": {
+        "width": 1365,
+        "height": 768
+      }
+    }
+  },
+  "capabilities": [
+    "core",
+    "core-tabs",
+    "core-navigation",
+    "core-input",
+    "vision"
+  ],
+  "outputDir": "E:/AI工具/淘宝店运营流/browser/mcp-output",
+  "timeouts": {
+    "action": 8000,
+    "navigation": 90000,
+    "expect": 8000
+  },
+  "imageResponses": "allow",
+  "snapshot": {
+    "mode": "full"
+  },
+  "codegen": "none"
+}
