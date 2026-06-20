@@ -1,0 +1,14 @@
+browser/automation-node/
+browser/chrome/
+browser/chrome-default-user-data/
+browser/profile-*/
+browser/cache-*/
+browser/downloads/
+browser/mcp-output/
+.playwright-mcp/
+data/visual-learning/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.pdf

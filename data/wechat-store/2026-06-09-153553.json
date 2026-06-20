@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-06-09T07:35:53.143Z",
+  "collected": [
+    {
+      "key": "transaction",
+      "name": "交易数据",
+      "url": "https://store.weixin.qq.com/shop/statistics/transaction",
+      "finalUrl": "https://store.weixin.qq.com/shop/statistics/transaction",
+      "status": "login_required",
+      "message": "需要先在打开的浏览器窗口扫码或完成登录，然后重新运行脚本。",
+      "metrics": {},
+      "text": "登录超时，请重新 登录"
+    },
+    {
+      "key": "product",
+      "name": "商品数据",
+      "url": "https://store.weixin.qq.com/shop/statistics/product",
+      "finalUrl": "https://store.weixin.qq.com/shop/statistics/product",
+      "status": "login_required",
+      "message": "需要先在打开的浏览器窗口扫码或完成登录，然后重新运行脚本。",
+      "metrics": {},
+      "text": "登录超时，请重新 登录"
+    },
+    {
+      "key": "crowd",
+      "name": "人群数据",
+      "url": "https://store.weixin.qq.com/shop/statistics/collect",
+      "finalUrl": "https://store.weixin.qq.com/shop/statistics/collect",
+      "status": "login_required",
+      "message": "需要先在打开的浏览器窗口扫码或完成登录，然后重新运行脚本。",
+      "metrics": {},
+      "text": "登录超时，请重新 登录"
+    },
+    {
+      "key": "compass",
+      "name": "电商罗盘",
+      "url": "https://store.weixin.qq.com/shop-faas/mmecnodecompasscommon/thirdParty/shop/loginCompassByShop",
+      "finalUrl": "https://store.weixin.qq.com/shop-faas/mmecnodecompasscommon/thirdParty/shop/loginCompassByShop",
+      "status": "login_required",
+      "message": "需要先在打开的浏览器窗口扫码或完成登录，然后重新运行脚本。",
+      "metrics": {},
+      "text": "{\"success\":false,\"code\":-1001,\"respStatusCode\":200003,\"msg\":\"请先登录\"}"
+    }
+  ]
+}
