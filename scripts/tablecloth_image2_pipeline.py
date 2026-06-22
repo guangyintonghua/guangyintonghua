@@ -471,14 +471,21 @@ def prepare_product(product_name: str) -> dict[str, Path]:
 
 
 def latest_generated_image() -> Path:
-    candidates = sorted(
-        [path for path in GENERATED_IMAGE_ROOT.rglob("*") if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}],
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    if not candidates:
+    if not GENERATED_IMAGE_ROOT.exists():
         raise RuntimeError("未找到订阅生图输出文件。")
-    return candidates[0]
+
+    session_dirs = [path for path in GENERATED_IMAGE_ROOT.iterdir() if path.is_dir()]
+    if session_dirs:
+        latest_session = max(session_dirs, key=lambda path: path.stat().st_mtime)
+        candidates = [path for path in latest_session.iterdir() if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}]
+        if candidates:
+            return max(candidates, key=lambda path: path.stat().st_mtime)
+
+    direct_files = [path for path in GENERATED_IMAGE_ROOT.iterdir() if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}]
+    if direct_files:
+        return max(direct_files, key=lambda path: path.stat().st_mtime)
+
+    raise RuntimeError("未找到订阅生图输出文件。")
 
 
 def capture_latest(product_name: str, scene_id: str, source: str | None = None) -> Path:
