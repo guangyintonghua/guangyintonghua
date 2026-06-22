@@ -29,6 +29,44 @@ class ProductContext:
     sizes: list[str]
     prices: list[str]
     style_tags: list[str]
+    hero_title: str
+    hero_subtitle: str
+    pattern_label: str
+    fringe_label: str
+    size_label: str
+    detail_material: str
+    detail_fringe: str
+    detail_scene: str
+
+
+PRODUCT_COPY = {
+    "1号品": {
+        "title": "北欧米白深灰蓝波点流苏桌布 亚麻感餐桌茶几盖布",
+        "guide_title": "米白蓝灰波点流苏桌布清爽百搭款",
+        "style_tags": ["北欧简约", "米白蓝灰点", "流苏花边", "低饱和百搭", "亚麻感"],
+        "hero_title": "米白蓝灰点",
+        "hero_subtitle": "颜色更柔和，适合餐桌和茶几",
+        "pattern_label": "米白蓝灰点",
+        "fringe_label": "流苏边更出片",
+        "size_label": "三档尺寸",
+        "detail_material": "亚麻感肌理清楚，不会只有远看好看。",
+        "detail_fringe": "流苏边是这轮素材里最明显的识别点。",
+        "detail_scene": "更适合家用、茶几、拍照布景和民宿陈列。",
+    },
+    "2号品": {
+        "title": "复古深底碎花流苏棉布桌布",
+        "guide_title": "深底黄白碎花流苏桌布复古百搭款",
+        "style_tags": ["复古田园", "深底碎花", "米白流苏", "棉布印花", "轻薄垂感"],
+        "hero_title": "深底黄白碎花",
+        "hero_subtitle": "复古田园感更明显，木色餐桌更好搭",
+        "pattern_label": "深底碎花更耐看",
+        "fringe_label": "3cm流苏花边",
+        "size_label": "常用尺寸",
+        "detail_material": "棉布印花偏轻薄，布面柔和，近看有细密织纹。",
+        "detail_fringe": "米白流苏花边宽约3厘米，排布参考1号品布局。",
+        "detail_scene": "更适合餐桌、早餐角、边柜和复古家居陈列。",
+    },
+}
 
 
 def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -118,25 +156,36 @@ def read_context(product_name: str | None = None) -> ProductContext:
         product_dir = next(path for path in PRODUCT_ROOT.iterdir() if path.is_dir())
     workbook_path = next(product_dir.glob("*.xlsx"))
     images = sorted([path for path in product_dir.iterdir() if path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}])
-    if len(images) < 2:
-        raise RuntimeError(f"{product_dir} 至少需要 2 张素材图。")
+    texture_image = next((path for path in images if "_ref" in path.stem.lower()), None)
+    if texture_image is None:
+        texture_image = next((path for path in images if "_source" not in path.stem.lower()), None)
+    if texture_image is None:
+        raise RuntimeError(f"{product_dir} 缺少可用的布面参考图。")
+
+    local_edge = next((path for path in images if "edge" in path.stem.lower() or "花边" in path.stem), None)
+    global_edge = PRODUCT_ROOT / "花边图" / "统一花边参考图.jpg"
+    edge_image = local_edge if local_edge else global_edge
+    if not edge_image.exists():
+        raise RuntimeError(f"{product_dir} 缺少花边参考图。")
 
     wb = load_workbook(workbook_path)
     ws = wb["SKU信息登记"]
     category = str(ws["B4"].value or "桌布")
-    material = str(ws["B10"].value or "亚麻混纺")
+    material = str(ws["B10"].value or "棉布")
     sizes = [str(cell.value) for cell in ws[7][1:4] if cell.value]
     prices = [str(cell.value) for cell in ws[8][1:4] if cell.value]
+    copy = PRODUCT_COPY.get(product_dir.name, PRODUCT_COPY["1号品"])
 
-    title = "北欧米白深灰蓝波点流苏桌布 亚麻感餐桌茶几盖布"
-    guide_title = "米白蓝灰波点流苏桌布清爽百搭款"
-    style_tags = ["北欧简约", "米白蓝灰点", "流苏花边", "低饱和百搭", "亚麻感"]
+    title = str(ws["B2"].value or copy["title"])
+    guide_title = str(ws["B3"].value or copy["guide_title"])
+    style_raw = str(ws["B6"].value or "、".join(copy["style_tags"]))
+    style_tags = [item.strip() for item in style_raw.replace("，", "、").split("、") if item.strip()]
 
     return ProductContext(
         product_dir=product_dir,
         workbook_path=workbook_path,
-        texture_image=images[0],
-        edge_image=images[1],
+        texture_image=texture_image,
+        edge_image=edge_image,
         title=title,
         guide_title=guide_title,
         category=category,
@@ -144,6 +193,14 @@ def read_context(product_name: str | None = None) -> ProductContext:
         sizes=sizes,
         prices=prices,
         style_tags=style_tags,
+        hero_title=copy["hero_title"],
+        hero_subtitle=copy["hero_subtitle"],
+        pattern_label=copy["pattern_label"],
+        fringe_label=copy["fringe_label"],
+        size_label=copy["size_label"],
+        detail_material=copy["detail_material"],
+        detail_fringe=copy["detail_fringe"],
+        detail_scene=copy["detail_scene"],
     )
 
 
@@ -170,8 +227,8 @@ def make_white_bg(texture: Image.Image, edge: Image.Image, output_path: Path) ->
 
     title_font = load_font(36)
     sub_font = load_font(24)
-    draw.text((110, 54), "白底图原型", font=title_font, fill="#1F2430")
-    draw.text((110, 98), "基于布面近拍 + 流苏边结构合成", font=sub_font, fill="#6B7280")
+    draw.text((110, 54), "白底图最终版", font=title_font, fill="#1F2430")
+    draw.text((110, 98), "桌体要实、布感要软、边角放松、离地不贴地", font=sub_font, fill="#6B7280")
     canvas.save(output_path, quality=95)
 
 
@@ -180,11 +237,11 @@ def render_square_series(ctx: ProductContext, texture: Image.Image, edge: Image.
     bg_colors = ["#F7F3ED", "#F5F5F4", "#EEE8E0", "#F2EFEA", "#F7F6F2"]
     accents = ["#1F2937", "#4B5563", "#374151", "#6B7280", "#111827"]
     headlines = [
-        ("米白蓝灰点", "颜色更柔和，适合餐桌和茶几"),
-        ("流苏边更出片", "边缘细节比纯平铺更有记忆点"),
-        ("亚麻感肌理", "布面纹理清楚，近看也耐看"),
-        ("三档尺寸", "小茶几到大餐桌都能覆盖"),
-        ("基础款好搭配", "民宿、家用、拍照布景都能用"),
+        (ctx.hero_title, ctx.hero_subtitle),
+        (ctx.fringe_label, "边缘细节比普通平边更完整"),
+        ("布面纹理", ctx.detail_material),
+        (ctx.size_label, "小桌到餐桌都能覆盖"),
+        ("日常更好搭", ctx.detail_scene),
     ]
 
     for idx, (headline, body) in enumerate(headlines, start=1):
@@ -213,11 +270,11 @@ def render_square_series(ctx: ProductContext, texture: Image.Image, edge: Image.
 def render_portrait_series(ctx: ProductContext, texture: Image.Image, edge: Image.Image, output_dir: Path) -> list[Path]:
     outputs: list[Path] = []
     page_titles = [
-        ("波点桌布", "米白底配深灰蓝点，耐看不跳色"),
-        ("流苏边缘", "布面朴素，边缘更有轻松感"),
-        ("家用陈列", "餐桌、茶几、柜面都能搭"),
-        ("尺寸选择", "60x60 / 100x140 / 180x140"),
-        ("近拍细节", "布纹和点位都清楚"),
+        (ctx.hero_title, ctx.hero_subtitle),
+        ("花边细节", ctx.detail_fringe),
+        ("家用陈列", ctx.detail_scene),
+        ("尺寸选择", " / ".join(ctx.sizes)),
+        ("近拍细节", ctx.detail_material),
     ]
     for idx, (title, sub) in enumerate(page_titles, start=1):
         canvas = Image.new("RGB", (900, 1200), "#F6F2EC")
@@ -253,10 +310,10 @@ def render_selling_point(ctx: ProductContext, texture: Image.Image, edge: Image.
     draw.text((54, 122), "成品卖点图，重点放真实可见细节", font=load_font(24), fill="#6B7280")
 
     cards = [
-        ("布面耐看", "米白底配深灰蓝圆点，日常搭配压力小。"),
-        ("流苏加分", "边缘不是简单包边，视觉更轻松。"),
+        ("花型耐看", ctx.hero_subtitle),
+        ("花边加分", ctx.detail_fringe),
         ("尺寸完整", "从小桌到长桌，常用规格都能覆盖。"),
-        ("近拍有料", "亚麻感纹理清楚，不会只有远看好看。"),
+        ("近拍有料", ctx.detail_material),
     ]
     for idx, (title, body) in enumerate(cards):
         top = 208 + idx * 224
@@ -275,11 +332,11 @@ def render_detail_pages(ctx: ProductContext, texture: Image.Image, edge: Image.I
     draw = ImageDraw.Draw(canvas)
 
     sections = [
-        ("01 主题封面", "米白蓝灰点 + 流苏边，先建立基础款印象。"),
-        ("02 布面纹理", f"材质：{ctx.material}"),
-        ("03 边缘细节", "流苏边是这轮素材里最明显的识别点。"),
+        ("01 主题封面", f"{ctx.hero_title} + {ctx.fringe_label}，先建立产品印象。"),
+        ("02 布面纹理", f"材质：{ctx.material}。{ctx.detail_material}"),
+        ("03 边缘细节", ctx.detail_fringe),
         ("04 尺寸价格", "结合登记表直接给出选择参考。"),
-        ("05 使用建议", "更适合家用、茶几、拍照布景和民宿陈列。"),
+        ("05 使用建议", ctx.detail_scene),
     ]
 
     for idx, (title, body) in enumerate(sections):
@@ -337,15 +394,12 @@ def run(product_name: str | None = None) -> dict[str, list[Path] | Path]:
     white_dir = ensure_output_dir(ctx.product_dir, "白底图", "01_白底图")
     square_dir = ensure_output_dir(ctx.product_dir, "1比1主图", "02_1比1主图")
     portrait_dir = ensure_output_dir(ctx.product_dir, "3比4主图", "03_3比4主图")
-    selling_dir = ensure_output_dir(ctx.product_dir, "卖点图", "04_卖点图")
     detail_dir = ensure_output_dir(ctx.product_dir, "详情页", "05_详情页")
 
     white_path = white_dir / "01_白底图_01.jpg"
     make_white_bg(texture, edge, white_path)
     square_paths = render_square_series(ctx, texture, edge, square_dir)
     portrait_paths = render_portrait_series(ctx, texture, edge, portrait_dir)
-    selling_path = selling_dir / "04_卖点图_01.jpg"
-    render_selling_point(ctx, texture, edge, selling_path)
     detail_master, detail_slices = render_detail_pages(ctx, texture, edge, detail_dir)
 
     update_workbook(ctx)
@@ -354,7 +408,6 @@ def run(product_name: str | None = None) -> dict[str, list[Path] | Path]:
         "white": [white_path],
         "square": square_paths,
         "portrait": portrait_paths,
-        "selling": [selling_path],
         "detail": [detail_master, *detail_slices],
         "workbook": [ctx.workbook_path],
     }
