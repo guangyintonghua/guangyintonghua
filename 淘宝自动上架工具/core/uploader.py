@@ -94,11 +94,6 @@ class TaobaoUploader:
                 await self._upload_white_bg_image(product)
                 if not await self._ok(): return False
 
-            if product.selling_images:
-                self._step('卖点图')
-                await self._upload_selling_images(product)
-                if not await self._ok(): return False
-
             if product.detail_images:
                 self._step('详情图')
                 await self._upload_detail_images(product)
@@ -340,20 +335,17 @@ class TaobaoUploader:
 
         await slot.scroll_into_view_if_needed()
         await slot.click()
-        await asyncio.sleep(4.0)   # 网络慢时 sucai 需要更多时间初始化
 
-        # 等待 sucai iframe 出现
+        # 等待 sucai iframe 出现（_get_sucai_frame 已内含最多40s轮询）
         sucai_frame = await self._get_sucai_frame()
         if sucai_frame is None:
             # 重试：关闭可能残留的 overlay，重新点击槽位
             logger.debug(f"  主图 {i+1}: iframe 未出现，关闭残留 overlay 后重试")
             await self._force_close_sucai_overlay()
-            await asyncio.sleep(2.0)
             slot2 = section.locator('div.image-empty').first
             if await slot2.count():
                 await slot2.scroll_into_view_if_needed()
                 await slot2.click()
-                await asyncio.sleep(4.0)
                 sucai_frame = await self._get_sucai_frame()
 
         if sucai_frame is None:
@@ -367,14 +359,13 @@ class TaobaoUploader:
         # 首次失败：图片已入库但在上传标签页无法通过touch选中（realtime模式无footer兜底）
         # 关闭sucai重新打开，此时图片已在library，走library路径可成功
         logger.debug(f"  主图 {i+1}: 首次失败，重开sucai走library路径重试")
-        await asyncio.sleep(2.0)
+        await asyncio.sleep(1.0)
         slot_retry = section.locator('div.image-empty').first
         if not await slot_retry.count():
             logger.warning(f"  主图 {i+1}: 重试时无空槽位（图片可能已成功入槽）")
             return False
         await slot_retry.scroll_into_view_if_needed()
         await slot_retry.click()
-        await asyncio.sleep(2.5)
         sucai_frame2 = await self._get_sucai_frame()
         if sucai_frame2 is None:
             logger.warning(f"  主图 {i+1}: 重试时sucai iframe未出现")
@@ -490,6 +481,31 @@ class TaobaoUploader:
                 return True
             await asyncio.sleep(0.2)
         return False
+
+    async def _wait_slot_filled(self, section, prev_empty: int, max_s: float = 5.0) -> None:
+        """等待图片入槽（div.image-empty数减少），立即继续，最多等max_s秒兜底"""
+        for _ in range(int(max_s / 0.2)):
+            if await section.locator('div.image-empty').count() < prev_empty:
+                return
+            await asyncio.sleep(0.2)
+        logger.debug(f"  槽位更新等待超时({max_s}s)，继续")
+
+    async def _is_sucai_thumbnail_ready(self, sucai_frame, img_name: str) -> bool:
+        """检查sucai库中指定图片的缩略图是否CDN加载完成（img.complete && naturalWidth > 0）"""
+        stem = Path(img_name).stem.lower()
+        try:
+            result = await sucai_frame.evaluate("""(stem) => {
+                for (const item of document.querySelectorAll('[class*="PicList_PicturesShow_main-show"]')) {
+                    const title = item.querySelector('[class*="PicList_tip_title"]');
+                    if (!title || !title.textContent.toLowerCase().includes(stem)) continue;
+                    const img = item.querySelector('img');
+                    return img ? (img.complete && img.naturalWidth > 0) : false;
+                }
+                return null;
+            }""", stem)
+            return result is True
+        except Exception:
+            return False
 
     async def _get_sucai_handle_id(self, sucai_frame) -> str | None:
         """从sucai iframe URL提取handleId参数"""
@@ -815,9 +831,9 @@ class TaobaoUploader:
                 except Exception:
                     await local_btn.evaluate("el => el.click()")
 
-                # 等待 file input 出现（最多3s），hook 的 _tbFilePending 或直接 input[type=file]
+                # 等待 file input 出现（最多8s），hook 的 _tbFilePending 或直接 input[type=file]
                 file_sent = False
-                for _w in range(15):  # 3s
+                for _w in range(40):  # 8s
                     await asyncio.sleep(0.2)
                     inp_id = await sucai_frame.evaluate(
                         "() => { const id=window._tbFilePending; window._tbFilePending=null; return id; }"
@@ -839,7 +855,7 @@ class TaobaoUploader:
                         break
 
                 if not file_sent:
-                    # 最后兜底：恢复原始 click → 用 expect_file_chooser 等待原生文件对话框
+                    # 兜底1：恢复原始 click → 用 expect_file_chooser 等待原生文件对话框
                     logger.debug(f"  {label}: hook未捕获file input，尝试 expect_file_chooser")
                     try:
                         # 先恢复原始 input.click 以允许浏览器弹出文件对话框
@@ -849,7 +865,7 @@ class TaobaoUploader:
                                 window._tbFileHook = false;
                             }
                         }""")
-                        async with self.page.expect_file_chooser(timeout=5000) as fc_info:
+                        async with self.page.expect_file_chooser(timeout=10000) as fc_info:
                             try:
                                 await local_btn.click(timeout=3000, force=True)
                             except Exception:
@@ -860,8 +876,38 @@ class TaobaoUploader:
                         logger.debug(f"  {label}: expect_file_chooser 上传成功")
                     except Exception as _e:
                         logger.warning(f"  {label}: expect_file_chooser 也失败: {_e}")
-                        await self._force_close_sucai_overlay()
-                        return False
+                        # 兜底2：重装hook再点一次按钮，再等4s
+                        logger.debug(f"  {label}: 重装hook重试一次")
+                        await self._install_file_hook_in_frame(sucai_frame)
+                        await sucai_frame.evaluate("() => { window._tbFilePending = null; }")
+                        try:
+                            await local_btn.click(timeout=5000, force=True)
+                        except Exception:
+                            await local_btn.evaluate("el => el.click()")
+                        await asyncio.sleep(0.5)
+                        for _w2 in range(20):  # 4s
+                            await asyncio.sleep(0.2)
+                            inp_id2 = await sucai_frame.evaluate(
+                                "() => { const id=window._tbFilePending; window._tbFilePending=null; return id; }"
+                            )
+                            if inp_id2:
+                                loc2 = sucai_frame.locator(f'#{inp_id2}')
+                                if await loc2.count():
+                                    await loc2.set_input_files(str(img_path))
+                                else:
+                                    all_fi2 = await sucai_frame.locator('input[type="file"]').all()
+                                    if all_fi2:
+                                        await all_fi2[-1].set_input_files(str(img_path))
+                                file_sent = True
+                                break
+                            all_fi2 = await sucai_frame.locator('input[type="file"]').all()
+                            if all_fi2:
+                                await all_fi2[-1].set_input_files(str(img_path))
+                                file_sent = True
+                                break
+                        if not file_sent:
+                            await self._force_close_sucai_overlay()
+                            return False
 
             logger.debug(f"  {label}: set_input_files完成（hook路径），等待上传（最多90s）")
         # 上传后不再验证handleId：sucai可能已重新加载（新handleId），接受任何postMessage
@@ -905,11 +951,12 @@ class TaobaoUploader:
                     sucai_frame = fresh
                     if upload_found_tick < 0:
                         upload_found_tick = tick
-                        logger.debug(f"  {label}: 图片已入库，等4s确保CDN完成...")
-                    # 首次点选等4s，之后每次重试间隔5s
+                        logger.debug(f"  {label}: 图片已入库，自适应等CDN完成...")
+                    # 优先检测CDN实际就绪；最多等4s(首次)/5s(重试)兜底
                     wait_ticks = 20 if upload_click_count == 0 else 25
                     ref_tick = upload_found_tick if upload_click_count == 0 else upload_last_click_tick
-                    if tick - ref_tick >= wait_ticks:
+                    cdn_ok = await self._is_sucai_thumbnail_ready(fresh, img_path.name)
+                    if cdn_ok or tick - ref_tick >= wait_ticks:
                         already = await self.page.evaluate("() => window.__sucai_received || null")
                         if already:
                             logger.debug(f"  {label}: auto-postMessage收到，直接接受")
@@ -1109,14 +1156,15 @@ class TaobaoUploader:
                 continue
             self._step(f'主图 {i+1}/{total}')
             try:
+                prev_empty = await section.locator('div.image-empty').count()
                 ok = await self._upload_via_sucai_iframe(img_path, i)
                 if ok:
                     logger.debug(f"  主图 {i+1}/{total} 完成")
-                    await asyncio.sleep(2.0)
+                    await self._wait_slot_filled(section, prev_empty)
                     await self.human.pause(0.5, 1.0)
                 else:
                     logger.warning(f"  主图 {i+1} 上传失败，继续下一张")
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(0.5)
             except Exception as e:
                 logger.warning(f"  主图 {i+1} 上传异常: {e}")
                 await self.page.keyboard.press('Escape')
@@ -1160,34 +1208,46 @@ class TaobaoUploader:
                     logger.warning(f"  3:4主图 {i+1}: 无更多空槽位")
                     break
 
+                prev_empty = await section.locator('div.image-empty').count()
                 await slot.scroll_into_view_if_needed()
                 await slot.click()
-                await asyncio.sleep(2.0)
 
                 sucai_frame = await self._get_sucai_frame()
                 if sucai_frame is None:
                     await self._force_close_sucai_overlay()
-                    await asyncio.sleep(1.5)
                     slot2 = section.locator('div.image-empty').first
                     if await slot2.count():
                         await slot2.scroll_into_view_if_needed()
                         await slot2.click()
-                        await asyncio.sleep(2.0)
                         sucai_frame = await self._get_sucai_frame()
 
                 if sucai_frame is None:
                     logger.warning(f"  3:4主图 {i+1}: 素材选择器 iframe 未出现")
                     continue
 
-                await asyncio.sleep(1.5)
                 ok = await self._select_from_sucai(sucai_frame, img_path, f"3:4主图{i+1}")
+                if not ok:
+                    # 首次失败：重开sucai走library路径重试
+                    logger.debug(f"  3:4主图 {i+1}: 首次失败，重开sucai走library路径重试")
+                    await asyncio.sleep(1.0)
+                    slot_retry = section.locator('div.image-empty').first
+                    if await slot_retry.count():
+                        await slot_retry.scroll_into_view_if_needed()
+                        await slot_retry.click()
+                        sucai_frame2 = await self._get_sucai_frame()
+                        if sucai_frame2:
+                            ok = await self._select_from_sucai(sucai_frame2, img_path, f"3:4主图{i+1}重试")
+                        else:
+                            logger.warning(f"  3:4主图 {i+1}: 重试时sucai iframe未出现")
+                    else:
+                        logger.warning(f"  3:4主图 {i+1}: 重试时无空槽位（图片可能已成功入槽）")
                 if ok:
                     logger.debug(f"  3:4主图 {i+1}/{total} 完成")
-                    await asyncio.sleep(2.0)
+                    await self._wait_slot_filled(section, prev_empty)
                     await self.human.pause(0.5, 1.0)
                 else:
                     logger.warning(f"  3:4主图 {i+1} 上传失败，继续下一张")
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(0.5)
             except Exception as e:
                 logger.warning(f"  3:4主图 {i+1} 上传异常: {e}")
                 await self.page.keyboard.press('Escape')
@@ -1216,29 +1276,43 @@ class TaobaoUploader:
             logger.warning(f"[{product.seq}] 白底图区无可用槽位，跳过")
             return
 
+        prev_empty = await section.locator('div.image-empty').count()
         await slot.scroll_into_view_if_needed()
         await slot.click()
-        await asyncio.sleep(2.0)
 
         sucai_frame = await self._get_sucai_frame()
         if sucai_frame is None:
             await self._force_close_sucai_overlay()
-            await asyncio.sleep(1.5)
             slot2 = section.locator('div.image-empty').first
             if await slot2.count():
                 await slot2.click()
-                await asyncio.sleep(2.0)
                 sucai_frame = await self._get_sucai_frame()
 
         if sucai_frame is None:
             logger.warning(f"[{product.seq}] 白底图素材选择器 iframe 未出现")
             return
 
-        await asyncio.sleep(1.5)
         ok = await self._select_from_sucai(sucai_frame, img_path, "白底图1")
+        if not ok:
+            # 首次失败：重开sucai走library路径重试
+            logger.debug(f"  白底图: 首次失败，重开sucai走library路径重试")
+            await asyncio.sleep(1.0)
+            slot_retry = section.locator('div.image-empty').first
+            if not await slot_retry.count():
+                slot_retry = section.locator('[class*="add"], [class*="upload"], button').first
+            if await slot_retry.count():
+                await slot_retry.scroll_into_view_if_needed()
+                await slot_retry.click()
+                sucai_frame2 = await self._get_sucai_frame()
+                if sucai_frame2:
+                    ok = await self._select_from_sucai(sucai_frame2, img_path, "白底图1重试")
+                else:
+                    logger.warning(f"  白底图: 重试时sucai iframe未出现")
+            else:
+                logger.warning(f"  白底图: 重试时无空槽位（图片可能已成功入槽）")
         if ok:
             logger.debug(f"  白底图上传完成")
-            await asyncio.sleep(2.0)
+            await self._wait_slot_filled(section, prev_empty)
         else:
             logger.warning(f"  白底图上传失败")
         await self.human.between_fields()
@@ -1277,24 +1351,20 @@ class TaobaoUploader:
 
                 await slot.scroll_into_view_if_needed()
                 await slot.click(force=True)
-                await asyncio.sleep(2.0)
 
                 sucai_frame = await self._get_sucai_frame()
                 if sucai_frame is None:
                     await self._force_close_sucai_overlay()
-                    await asyncio.sleep(1.5)
                     slot2 = section.locator('div.image-empty').first
                     if await slot2.count():
                         await slot2.scroll_into_view_if_needed()
                         await slot2.click(force=True)
-                        await asyncio.sleep(2.0)
                         sucai_frame = await self._get_sucai_frame()
 
                 if sucai_frame is None:
                     logger.warning(f"  卖点图 {i+1}: 素材选择器 iframe 未出现，跳过")
                     continue
 
-                await asyncio.sleep(1.5)
                 ok = await self._select_from_sucai(sucai_frame, img_path, f"卖点图{i+1}")
                 if ok:
                     logger.debug(f"  卖点图 {i+1}/{total} 完成")
@@ -1375,7 +1445,11 @@ class TaobaoUploader:
                 ok = await self._select_from_sucai(sucai_frame, img_path, f"详情图{i+1}")
                 if ok:
                     logger.debug(f"  详情图 {i+1}: 完成 {img_path.name}")
-                    await asyncio.sleep(2.0)  # 等待图片模块加入编辑器
+                    # 等 overlay 完全消失后 React 渲染图片模块（最多2s）
+                    for _dw in range(10):
+                        await asyncio.sleep(0.2)
+                        if not await self.page.locator('.next-overlay-wrapper.opened').count():
+                            break
                 else:
                     logger.warning(f"  详情图 {i+1}: 选图失败 {img_path.name}")
 
