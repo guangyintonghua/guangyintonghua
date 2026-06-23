@@ -19,6 +19,7 @@ OUTPUT_ROOT = WORKFLOW_ROOT / "输出"
 CACHE_ROOT = OUTPUT_ROOT / "image2缓存"
 GENERATED_IMAGE_ROOT = Path.home() / ".codex" / "generated_images"
 FONT_PATH = Path(r"C:\Windows\Fonts\msyh.ttc")
+CURRENT_PRODUCT_NAME = ""
 
 
 PRODUCT_COPY = {
@@ -47,6 +48,19 @@ PRODUCT_COPY = {
         "hero_subtitle": "复古田园感更明显，木色餐桌更好搭",
         "pattern_label": "复古碎花更耐看",
         "scene_hint": "适合餐桌、早餐角、边柜、复古家居陈列",
+    },
+    "3号品": {
+        "title": "法式浅灰小碎花流苏棉布桌布",
+        "guide_title": "浅灰小碎花流苏桌布",
+        "title_direction": "法式静雅浅灰小碎花桌布",
+        "house_style": "法式静雅浅灰家居风",
+        "house_palette": "雾灰、奶油白、浅木色、淡黄、鼠尾草绿",
+        "visual_traits": "浅灰底、细小碎花印花、细短米白编结花边、轻薄棉布、自然垂感",
+        "style_tags": ["法式静雅", "浅灰小碎花", "细短流苏", "轻薄棉布", "自然垂感"],
+        "hero_title": "浅灰小碎花",
+        "hero_subtitle": "细碎更耐看，边角更轻巧",
+        "pattern_label": "浅灰小碎花",
+        "scene_hint": "适合餐桌、边柜、阳台茶桌、法式家居陈列",
     },
 }
 
@@ -364,14 +378,16 @@ def build_prompt(
             "Use case: photorealistic-natural",
             f"Asset type: Taobao {aspect_label} tablecloth listing image",
             f"Primary request: generate one premium ecommerce lifestyle image for {ctx.title}",
-            "Input images: Image 1 reference fabric pattern; Image 2 reference tassel edge",
+            "Input images: Image 1 reference fabric pattern; Image 2 is the exact correct tassel lace edge reference and must be matched closely",
             f"Scene/backdrop: {scene_name}",
             f"House style: {ctx.house_style}",
             f"House palette: {ctx.house_palette}",
             f"Furniture palette: {furniture_palette}",
             f"Decor notes: {decor_notes}",
             "Constraint: keep all images of this product in the same house style; vary only room function, table shape, angle, and props.",
-            f"Subject: {ctx.visual_traits}; the product is a thin cotton printed tablecloth with an off-white tassel trim about 3 cm wide around the edges",
+            "Constraint: use noticeably different camera angles across scenes; if the table is round, the square tablecloth should still be used and drape naturally with softened corners.",
+            "Constraint: the tablecloth corners must hang down naturally and softly; do not prop them open, brace them upward, or make them look stiff.",
+            f"Subject: {ctx.visual_traits}; the product is a thin cotton printed tablecloth with the exact off-white woven tassel lace edge from Image 2 reference, a narrow braided border with evenly spaced dangling tassels about 3 cm wide around the edges, do not turn it into a thick fringe",
             "Style/medium: premium ecommerce photography, realistic home textile rendering",
             f"Composition/framing: {composition}",
             f"Lighting/mood: {light}",
@@ -384,27 +400,50 @@ def build_prompt(
 
 
 def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
-    square_scenes = [
-        ("sq01", "日常餐桌", "bright japandi dining room with a light oak table, linen curtains, and pale plaster wall", "warm oak table, beige spindle chairs, stoneware dishes", "simple wall art, dried branches, soft cream textiles, quiet modern home feel", "square composition, three-quarter angle, full tabletop visible, tassels visible on two sides", "soft side-window morning light", "plates, glassware, folded cloth napkin", "show the overall pattern clearly"),
-        ("sq02", "庭院茶桌", "mediterranean courtyard table under a light parasol with stone walls and olive trees", "weathered wood table, white metal chair, terracotta planter accents", "ceramic jug, sun-faded cushions, layered greenery, outdoor hosting mood", "square composition, slightly elevated angle, one near corner visible, edge drape visible", "warm late-morning sun with gentle shade", "teapot, dessert plates, fruit dish", "show a fresh outdoor hosting atmosphere"),
-        ("sq03", "阳台早餐", "paris balcony breakfast nook with a compact round table and iron bistro chair", "black iron chair, cream round table, warm beige floor tiles", "striped awning, small herb pot, glass vase, city-view lifestyle", "square composition, near eye-level angle, round tabletop centered, tassel edge flowing naturally", "soft morning glow", "coffee cup, toast plate, small vase", "show lightweight drape and everyday comfort"),
-        ("sq04", "厨边陈列", "rustic kitchen island with sage cabinetry, open shelving, and stoneware", "sage cabinet, oak shelf, brass hooks, matte ceramic jars", "recipe books, candle, tray, branch leaves, lived-in kitchen styling", "square composition, frontal angle, tablecloth spread on a console or side cabinet with edge overhang", "warm afternoon light", "books, candle, tray, branch leaves", "show this is suitable beyond dining tables"),
-        ("sq05", "花园桌角", "garden tea corner with a woven chair, terracotta pots, and blooming wildflowers", "wicker chair, terracotta planter, dark wood side table", "wildflower sprigs, linen napkin, rustic pottery, airy garden texture", "square composition, close-up angle, corner fold and tassels dominant, still clearly a tablecloth scene", "soft directional highlight", "ceramic cup, linen napkin, small plate", "show thin cotton texture and neat tassel finish"),
-    ]
-    portrait_scenes = [
-        ("pt01", "餐桌主图", "minimal Scandinavian dining nook with pale oak furniture and stoneware", "pale oak table, cream upholstered chair, linen drape", "simple ceramic set, neutral wall art, airy lightness", "portrait composition, three-quarter angle, room depth visible behind the table", "clean side-window diffuse light", "plate set, glass cup, greenery", "make the tablecloth the main subject"),
-        ("pt02", "待客氛围", "garden-facing dining scene with open French doors and a more layered home interior", "warm wood table, sage chair, light cane details", "flower vase, serving tray, open doorway, lived-in but refined home", "portrait composition, slightly wider frame, table and surrounding chair hints visible", "warm late-morning light", "tea set, serving tray, fruit bowl", "show richer decor without overpowering the product"),
-        ("pt03", "圆桌茶点", "round tea table in a sunroom corner beside tall plants and a rattan seat", "round rattan-backed chair, cream tabletop, honey wood rim", "tea service, small blossoms, airy sunroom atmosphere", "portrait composition, gentle high angle, round table fully readable", "soft afternoon light", "tea cup, pastry plate, small flowers", "show a different table shape and scene rhythm"),
-        ("pt04", "玄关边柜", "bright entry console styling scene with art prints and a brass tray", "walnut console, cream wall, black frame accents", "framed botanical art, brass tray, sculptural ornament, layered entryway", "portrait composition, frontal angle, cabinet styling emphasized", "soft indoor light with slight highlight separation", "frame, candle, stack of books, tray", "show multi-scene adaptability"),
-        ("pt05", "近景垂感", "close scene focused on one corner of a dining table beside a window seat and soft bench", "cream bench, light oak table leg, beige floor", "minimal linen napkin, one cup, quiet close-up with breathable space", "portrait composition, close-up with one corner hanging naturally, tassels crisp", "controlled side light with texture emphasis", "plate rim, fork, cup", "show the lightweight cotton drape and edge workmanship"),
-    ]
-    detail_scenes = [
-        ("dt01", "详情首屏", "warm japandi dining room hero scene with product fully styled", "light oak table, cream chair, linen curtain", "stoneware, pale art print, soft off-white accessories", "portrait composition, polished full-scene hero shot with clear negative space", "soft natural daylight", "plates, cup, foliage", "build first-screen purchase desire"),
-        ("dt02", "花型说明", "tabletop scene emphasizing print readability and color accuracy in a clean modern kitchen", "white tile backdrop, charcoal stool, pale wood counter", "simple dishware, steel cup, restrained backdrop", "portrait composition, medium-close view across the tabletop", "soft window light", "simple dishware, no clutter", "focus on print and color explanation"),
-        ("dt03", "材质流苏", "close edge scene showing tassels and textile weave on a dark wood bench", "dark walnut bench, warm brown floor", "one linen napkin, no extra decoration, texture-first close-up", "portrait composition, close framing on one hanging edge", "angled light with texture shadow", "minimal props only", "focus on texture, tassel trim, and thin cotton feel"),
-        ("dt04", "多场景适配", "different home furniture setting such as console, tea table, or balcony table", "walnut console, rattan tea table, pale balcony chair", "books, tray, candle, mixed-home styling", "portrait composition, wider environment context", "warm indoor daylight", "books, tray, candle", "show scene adaptability without repeating main-image composition"),
-        ("dt05", "尺寸选择", "clean listing-friendly dining scene with stable visual structure", "light oak table, ivory chair, calm wall", "minimal props, open negative space, size-selection clarity", "portrait composition, calm background and clear product silhouette", "balanced soft light", "minimal props", "leave visual rhythm suitable for a size selection page"),
-    ]
+    if ctx.product_name == "3号品":
+        square_scenes = [
+            ("sq01", "法式餐桌", "soft french dining room with ash wood table, ivory upholstered chairs, and pale gray plaster wall", "ash wood table, ivory chair, pale ceramic dishware", "gauze curtains, a tiny yellow floral vase, quiet modern french home feel", "square composition, three-quarter angle, full tabletop visible, tassels visible on two sides", "soft side-window morning light", "plates, glassware, folded cloth napkin", "show the overall pattern clearly"),
+            ("sq02", "阳台晨光", "bright balcony breakfast nook with a round oak table and light rattan chair", "round oak table, rattan chair, ivory tabletop accessories", "sheer curtain, white kettle, small bud vase, airy morning lifestyle", "square composition, slightly elevated angle, one near corner visible, edge drape visible", "warm morning sun with gentle shade", "tea cup, toast plate, small vase", "show a fresh and airy hosting atmosphere"),
+            ("sq03", "圆桌茶点", "round tea table with a square tablecloth, softly draped corners, beside tall plants and a woven seat", "round woven chair, cream tabletop, pale wood rim", "tea service, small blossoms, airy sunroom atmosphere", "square composition, close but open framing, the square cloth on the round table reads clearly", "soft afternoon light", "book, cup, small flower, tray", "show lightweight drape and everyday comfort"),
+            ("sq04", "玄关陈列", "clean entry console with cream wall, brass frame, and a pale wood cabinet", "pale wood cabinet, cream wall, brass accents", "art print, candle, glass object, layered entryway styling", "square composition, frontal angle, tablecloth spread on a console or side cabinet with edge overhang", "warm neutral indoor light", "books, candle, tray, frame", "show this is suitable beyond dining tables"),
+            ("sq05", "近景垂感", "window-side close scene with one hanging corner and soft background blur", "light wood table, ivory bench, gray floor", "one glass cup, linen napkin, airy negative space, texture-first mood", "square composition, close-up angle, corner fold and tassels dominant, still clearly a tablecloth scene", "soft directional highlight", "ceramic cup, linen napkin, small plate", "show thin cotton texture and neat tassel finish"),
+        ]
+        portrait_scenes = [
+            ("pt01", "餐桌主图", "minimal french dining nook with pale ash furniture and stoneware", "pale ash table, cream upholstered chair, linen drape", "simple ceramic set, pale wall art, airy lightness", "portrait composition, three-quarter angle, room depth visible behind the table", "clean side-window diffuse light", "plate set, glass cup, greenery", "make the tablecloth the main subject"),
+            ("pt02", "待客氛围", "garden-facing dining scene with open french doors and a refined light interior", "warm ash table, ivory chair, light cane details", "flower vase, serving tray, open doorway, polished but relaxed home", "portrait composition, slightly wider frame, table and surrounding chair hints visible", "warm late-morning light", "tea set, serving tray, fruit bowl", "show richer decor without overpowering the product"),
+            ("pt03", "圆桌茶点", "round tea table with a square tablecloth in a sunroom corner beside tall plants and a woven seat", "round woven chair, cream tabletop, pale wood rim", "tea service, small blossoms, airy sunroom atmosphere", "portrait composition, gentle high angle, round table fully readable, square cloth corners softly visible", "soft afternoon light", "tea cup, pastry plate, small flowers", "show a different table shape and scene rhythm"),
+            ("pt04", "边柜陈列", "bright entry console styling scene with art prints and a brass tray", "walnut console, cream wall, brass accents", "framed botanical art, brass tray, sculptural ornament, layered entryway", "portrait composition, frontal angle, cabinet styling emphasized", "soft indoor light with slight highlight separation", "frame, candle, stack of books, tray", "show multi-scene adaptability"),
+            ("pt05", "近景垂感", "close scene focused on one corner of a dining table beside a window seat and soft bench", "cream bench, light wood table leg, pale floor", "minimal linen napkin, one cup, quiet close-up with breathable space", "portrait composition, close-up with one corner hanging naturally, tassels crisp", "controlled side light with texture emphasis", "plate rim, fork, cup", "show the lightweight cotton drape and edge workmanship"),
+        ]
+        detail_scenes = [
+            ("dt01", "详情首屏", "soft french dining room hero scene with product fully styled", "light ash table, cream chair, linen curtain", "stoneware, pale art print, soft ivory accessories", "portrait composition, polished full-scene hero shot with clear negative space", "soft natural daylight", "plates, cup, foliage", "build first-screen purchase desire"),
+            ("dt02", "花型说明", "tabletop scene emphasizing print readability and color accuracy in a calm modern kitchen", "white wall tile, pale wood counter, light stool", "simple dishware, glass cup, restrained backdrop", "portrait composition, medium-close view across the tabletop", "soft window light", "simple dishware, no clutter", "focus on print and color explanation"),
+            ("dt03", "材质流苏", "close edge scene showing tassels and textile weave on a light wood bench", "light wood bench, warm beige floor", "one linen napkin, no extra decoration, texture-first close-up", "portrait composition, close framing on one hanging edge", "angled light with texture shadow", "minimal props only", "focus on texture, tassel trim, and thin cotton feel"),
+            ("dt04", "多场景适配", "different home furniture setting such as console, tea table, or balcony table", "walnut console, round tea table, pale balcony chair", "books, tray, candle, mixed-home styling", "portrait composition, wider environment context", "warm indoor daylight", "books, tray, candle", "show scene adaptability without repeating main-image composition"),
+            ("dt05", "尺寸选择", "clean listing-friendly dining scene with stable visual structure", "light ash table, ivory chair, calm wall", "minimal props, open negative space, size-selection clarity", "portrait composition, calm background and clear product silhouette", "balanced soft light", "minimal props", "leave visual rhythm suitable for a size selection page"),
+        ]
+    else:
+        square_scenes = [
+            ("sq01", "日常餐桌", "bright japandi dining room with a light oak table, linen curtains, and pale plaster wall", "warm oak table, beige spindle chairs, stoneware dishes", "simple wall art, dried branches, soft cream textiles, quiet modern home feel", "square composition, three-quarter angle, full tabletop visible, tassels visible on two sides", "soft side-window morning light", "plates, glassware, folded cloth napkin", "show the overall pattern clearly"),
+            ("sq02", "庭院茶桌", "mediterranean courtyard table under a light parasol with stone walls and olive trees", "weathered wood table, white metal chair, terracotta planter accents", "ceramic jug, sun-faded cushions, layered greenery, outdoor hosting mood", "square composition, slightly elevated angle, one near corner visible, edge drape visible", "warm late-morning sun with gentle shade", "teapot, dessert plates, fruit dish", "show a fresh outdoor hosting atmosphere"),
+            ("sq03", "阳台早餐", "paris balcony breakfast nook with a compact round table and iron bistro chair", "black iron chair, cream round table, warm beige floor tiles", "striped awning, small herb pot, glass vase, city-view lifestyle", "square composition, near eye-level angle, round tabletop centered, tassel edge flowing naturally", "soft morning glow", "coffee cup, toast plate, small vase", "show lightweight drape and everyday comfort"),
+            ("sq04", "厨边陈列", "rustic kitchen island with sage cabinetry, open shelving, and stoneware", "sage cabinet, oak shelf, brass hooks, matte ceramic jars", "recipe books, candle, tray, branch leaves, lived-in kitchen styling", "square composition, frontal angle, tablecloth spread on a console or side cabinet with edge overhang", "warm afternoon light", "books, candle, tray, branch leaves", "show this is suitable beyond dining tables"),
+            ("sq05", "花园桌角", "garden tea corner with a woven chair, terracotta pots, and blooming wildflowers", "wicker chair, terracotta planter, dark wood side table", "wildflower sprigs, linen napkin, rustic pottery, airy garden texture", "square composition, close-up angle, corner fold and tassels dominant, still clearly a tablecloth scene", "soft directional highlight", "ceramic cup, linen napkin, small plate", "show thin cotton texture and neat tassel finish"),
+        ]
+        portrait_scenes = [
+            ("pt01", "餐桌主图", "minimal Scandinavian dining nook with pale oak furniture and stoneware", "pale oak table, cream upholstered chair, linen drape", "simple ceramic set, neutral wall art, airy lightness", "portrait composition, three-quarter angle, room depth visible behind the table", "clean side-window diffuse light", "plate set, glass cup, greenery", "make the tablecloth the main subject"),
+            ("pt02", "待客氛围", "garden-facing dining scene with open French doors and a more layered home interior", "warm wood table, sage chair, light cane details", "flower vase, serving tray, open doorway, lived-in but refined home", "portrait composition, slightly wider frame, table and surrounding chair hints visible", "warm late-morning light", "tea set, serving tray, fruit bowl", "show richer decor without overpowering the product"),
+            ("pt03", "圆桌茶点", "round tea table in a sunroom corner beside tall plants and a rattan seat", "round rattan-backed chair, cream tabletop, honey wood rim", "tea service, small blossoms, airy sunroom atmosphere", "portrait composition, gentle high angle, round table fully readable", "soft afternoon light", "tea cup, pastry plate, small flowers", "show a different table shape and scene rhythm"),
+            ("pt04", "玄关边柜", "bright entry console styling scene with art prints and a brass tray", "walnut console, cream wall, black frame accents", "framed botanical art, brass tray, sculptural ornament, layered entryway", "portrait composition, frontal angle, cabinet styling emphasized", "soft indoor light with slight highlight separation", "frame, candle, stack of books, tray", "show multi-scene adaptability"),
+            ("pt05", "近景垂感", "close scene focused on one corner of a dining table beside a window seat and soft bench", "cream bench, light oak table leg, beige floor", "minimal linen napkin, one cup, quiet close-up with breathable space", "portrait composition, close-up with one corner hanging naturally, tassels crisp", "controlled side light with texture emphasis", "plate rim, fork, cup", "show the lightweight cotton drape and edge workmanship"),
+        ]
+        detail_scenes = [
+            ("dt01", "详情首屏", "warm japandi dining room hero scene with product fully styled", "light oak table, cream chair, linen curtain", "stoneware, pale art print, soft off-white accessories", "portrait composition, polished full-scene hero shot with clear negative space", "soft natural daylight", "plates, cup, foliage", "build first-screen purchase desire"),
+            ("dt02", "花型说明", "tabletop scene emphasizing print readability and color accuracy in a clean modern kitchen", "white tile backdrop, charcoal stool, pale wood counter", "simple dishware, steel cup, restrained backdrop", "portrait composition, medium-close view across the tabletop", "soft window light", "simple dishware, no clutter", "focus on print and color explanation"),
+            ("dt03", "材质流苏", "close edge scene showing tassels and textile weave on a dark wood bench", "dark walnut bench, warm brown floor", "one linen napkin, no extra decoration, texture-first close-up", "portrait composition, close framing on one hanging edge", "angled light with texture shadow", "minimal props only", "focus on texture, tassel trim, and thin cotton feel"),
+            ("dt04", "多场景适配", "different home furniture setting such as console, tea table, or balcony table", "walnut console, rattan tea table, pale balcony chair", "books, tray, candle, mixed-home styling", "portrait composition, wider environment context", "warm indoor daylight", "books, tray, candle", "show scene adaptability without repeating main-image composition"),
+            ("dt05", "尺寸选择", "clean listing-friendly dining scene with stable visual structure", "light oak table, ivory chair, calm wall", "minimal props, open negative space, size-selection clarity", "portrait composition, calm background and clear product silhouette", "balanced soft light", "minimal props", "leave visual rhythm suitable for a size selection page"),
+        ]
 
     specs: list[SceneSpec] = [
         SceneSpec(
@@ -419,9 +458,9 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
                 "Use case: product-mockup",
                 "Asset type: Taobao white background product image",
                 f"Primary request: create one photorealistic product image for {ctx.title}",
-                "Input images: Image 1 reference fabric pattern; Image 2 reference tassel edge",
+                "Input images: Image 1 reference fabric pattern; Image 2 is the exact correct tassel lace edge reference and must be matched closely",
                 "Scene/backdrop: pure clean white studio background",
-                f"Subject: {ctx.visual_traits}; the tablecloth is neatly draped on a real solid dining table with a flat tabletop and sturdy legs that are mostly hidden, tassel trim about 3 cm wide visible on multiple sides, the hem hanging about 15 to 20 cm below the tabletop edge, corners relaxed and not stretched open, floor not visible or only a very small sliver at most",
+                f"Subject: {ctx.visual_traits}; the tablecloth is neatly draped on a real solid dining table with a flat tabletop and sturdy legs that are mostly hidden, use the exact off-white woven tassel lace edge from Image 2 reference, the narrow braided border and dangling tassels should read about 3 cm wide on multiple sides, the hem hanging about 15 to 20 cm below the tabletop edge, corners relaxed and hanging down naturally instead of being propped up or stretched open, floor not visible or only a very small sliver at most",
                 "Style/medium: clean ecommerce studio photography",
                 "Composition/framing: square product-centered composition, clear margins, full product shape readable",
                 "Lighting/mood: bright even studio light with soft grounding shadows only",
@@ -434,7 +473,7 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
     )
     ]
 
-    for scene_id, label, scene_name, composition, light, props, focus in square_scenes:
+    for scene_id, label, scene_name, furniture_palette, decor_notes, composition, light, props, focus in square_scenes:
         specs.append(
             SceneSpec(
                 scene_id=scene_id,
@@ -447,8 +486,8 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
                     ctx,
                     aspect_label="1:1 main image",
                     scene_name=scene_name,
-                    furniture_palette=composition.split(",")[0] if "," in composition else composition,
-                    decor_notes=focus,
+                    furniture_palette=furniture_palette,
+                    decor_notes=decor_notes,
                     composition=composition,
                     light=light,
                     props=props,
@@ -457,7 +496,7 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
             )
         )
 
-    for scene_id, label, scene_name, composition, light, props, focus in portrait_scenes:
+    for scene_id, label, scene_name, furniture_palette, decor_notes, composition, light, props, focus in portrait_scenes:
         specs.append(
             SceneSpec(
                 scene_id=scene_id,
@@ -470,8 +509,8 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
                     ctx,
                     aspect_label="3:4 main image",
                     scene_name=scene_name,
-                    furniture_palette=composition.split(",")[0] if "," in composition else composition,
-                    decor_notes=focus,
+                    furniture_palette=furniture_palette,
+                    decor_notes=decor_notes,
                     composition=composition,
                     light=light,
                     props=props,
@@ -480,7 +519,7 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
             )
         )
 
-    for scene_id, label, scene_name, composition, light, props, focus in detail_scenes:
+    for scene_id, label, scene_name, furniture_palette, decor_notes, composition, light, props, focus in detail_scenes:
         specs.append(
             SceneSpec(
                 scene_id=scene_id,
@@ -493,8 +532,8 @@ def build_scene_specs(ctx: ProductContext) -> list[SceneSpec]:
                     ctx,
                     aspect_label="detail page image",
                     scene_name=scene_name,
-                    furniture_palette=composition.split(",")[0] if "," in composition else composition,
-                    decor_notes=focus,
+                    furniture_palette=furniture_palette,
+                    decor_notes=decor_notes,
                     composition=composition,
                     light=light,
                     props=props,
@@ -531,7 +570,7 @@ def write_prompt_book(ctx: ProductContext, specs: list[SceneSpec], prompts_path:
         f"- 家居风格：{ctx.house_style}",
         f"- 家居配色：{ctx.house_palette}",
         f"- 视觉特征：{ctx.visual_traits}",
-        "- 花边要求：统一米白流苏花边，视觉宽度约 3 厘米，排布参考 1 号品。",
+        "- 花边要求：统一米白编结流苏花边，视觉宽度约 3 厘米，结构参考 2 号品和花边参考图，避免做成厚毛边。",
         "- 布料要求：薄棉布，自然垂感，不做厚重面料。",
         "- 正式目录只保留最终成品，中间 raw 图留在缓存目录。",
         "",
@@ -683,6 +722,78 @@ DETAIL_LAYOUT_COPY = {
     },
 }
 
+SQUARE_LAYOUT_COPY_3 = {
+    "sq01": {"eyebrow": "FRENCH EDIT", "title": "浅灰小碎花铺开 画面更安静", "body": "细碎花点把留白托出来，桌面自然有了呼吸感。"},
+    "sq02": {"eyebrow": "BALCONY LIGHT", "title": "晨光落进来 气质更轻盈", "body": "浅木色与米白一搭，法式松弛感便很清楚。"},
+    "sq03": {"eyebrow": "TABLE NOTE", "title": "不必堆满 也足够耐看", "body": "留白多一点，细碎花点反而更显克制。"},
+    "sq04": {"eyebrow": "HOME STORY", "title": "边柜与玄关 也能接住这份安静", "body": "灰白空间里，它会显得更干净也更有质感。"},
+    "sq05": {"eyebrow": "TEXTURE CLOSE-UP", "title": "花点细一点 流苏更轻巧", "body": "近拍时布纹柔和，边角也更利落。"},
+}
+
+PORTRAIT_LAYOUT_COPY_3 = {
+    "pt01": {"eyebrow": "FRENCH EDIT", "title": "浅灰小碎花", "body": "轻柔、安静、带一点编辑感。"},
+    "pt02": {"eyebrow": "SOFT HOSTING", "title": "桌面留白多一点 气质更高级", "body": "下午茶、点心与花器放上去，画面会更轻。"},
+    "pt03": {"eyebrow": "ROUND TABLE", "title": "小圆桌铺开 也能有精致呼吸感", "body": "布料轻薄，垂边自然，空间不会被压住。"},
+    "pt04": {"eyebrow": "SPACE NOTE", "title": "边柜与玄关 也能接住这份浅灰气息", "body": "离开餐桌后，它依旧能把家里衬得很安静。"},
+    "pt05": {"eyebrow": "TEXTURE NOTE", "title": "布纹柔和 流苏更显轻巧", "body": "边角近看更见质感，整体不会显得厚重。"},
+}
+
+DETAIL_LAYOUT_COPY_3 = {
+    "dt01": {
+        "section": "01",
+        "kicker": "MAGAZINE EDIT",
+        "title": "浅灰小碎花一铺开 画面就安静了下来",
+        "body": "细碎花点与浅灰底之间，留白、光线、质感都会更清楚。",
+        "bullets": ["封面感更强", "适合杂志风详情页", "画面高级且克制"],
+    },
+    "dt02": {
+        "section": "02",
+        "kicker": "COLOR STUDY",
+        "title": "花点更细 画面更显轻盈",
+        "body": "浅灰底与淡黄花点对比柔和，近看有层次，远看更安静。",
+        "bullets": ["颜色清爽，不显闷", "适合灰白家居与浅木色家具", "画面更容易出高级感"],
+    },
+    "dt03": {
+        "section": "03",
+        "kicker": "TEXTURE NOTE",
+        "title": "薄棉布顺着桌沿落下 轻盈得刚好",
+        "body": "不是厚重硬挺的质感，细短流苏垂下来会更柔和。",
+        "bullets": ["布面显得轻盈", "流苏更短更利落", "近拍时不会笨重"],
+    },
+    "dt04": {
+        "section": "04",
+        "kicker": "STYLE SCENE",
+        "title": "餐桌 侧边柜 阳台小桌 都能保持同一气质",
+        "body": "这种浅灰小碎花布，不挑场景，换个家居角落也依旧安静。",
+        "bullets": ["餐桌更清爽", "边柜陈列更完整", "阳台布景也合适"],
+    },
+    "dt05": {
+        "section": "05",
+        "kicker": "SIZE GUIDE",
+        "title": "按桌型选尺寸 落边比例会更漂亮",
+        "body": "从小桌到长桌，都能找到更舒服的落边尺度。",
+        "bullets": ["60cm*60cm 适合小桌", "100cm*140cm 适合日常餐桌", "180cm*140cm 覆盖更完整"],
+    },
+}
+
+
+def get_square_layout_copy(product_name: str) -> dict[str, dict[str, str]]:
+    if product_name == "3号品":
+        return SQUARE_LAYOUT_COPY_3
+    return SQUARE_LAYOUT_COPY
+
+
+def get_portrait_layout_copy(product_name: str) -> dict[str, dict[str, str]]:
+    if product_name == "3号品":
+        return PORTRAIT_LAYOUT_COPY_3
+    return PORTRAIT_LAYOUT_COPY
+
+
+def get_detail_layout_copy(product_name: str) -> dict[str, dict[str, str | list[str]]]:
+    if product_name == "3号品":
+        return DETAIL_LAYOUT_COPY_3
+    return DETAIL_LAYOUT_COPY
+
 
 def draw_text_block(
     draw: ImageDraw.ImageDraw,
@@ -785,10 +896,38 @@ def draw_detail_bullets(
 
 
 def render_square_layout(img: Image.Image, scene_id: str) -> Image.Image:
-    copy = SQUARE_LAYOUT_COPY[scene_id]
+    product_name = CURRENT_PRODUCT_NAME
+    copy = get_square_layout_copy(product_name)[scene_id]
     canvas = img.convert("RGBA")
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+
+    if product_name == "3号品":
+        if scene_id == "sq01":
+            draw.rounded_rectangle((42, 44, 430, 276), radius=34, fill=(241, 244, 243, 224))
+            draw.rounded_rectangle((58, 118, 70, 258), radius=6, fill=(180, 186, 182, 224))
+            draw_tag(draw, xy=(66, 62), text=copy["eyebrow"], fill=(95, 104, 100, 235), text_fill=(250, 248, 244, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(68, 128), title_font_size=44, body_font_size=22, title_fill=(60, 64, 62, 255), body_fill="#6C7470", title_width=8, body_width=12, max_height=112)
+        elif scene_id == "sq02":
+            draw.rounded_rectangle((414, 56, 746, 372), radius=34, fill=(236, 239, 238, 210))
+            draw.rectangle((442, 144, 452, 332), fill=(196, 200, 194, 230))
+            draw_tag(draw, xy=(476, 82), text=copy["eyebrow"], fill=(144, 151, 147, 235), text_fill=(250, 249, 246, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(466, 148), title_font_size=30, body_font_size=17, title_fill=(62, 66, 63, 255), body_fill="#707774", title_width=8, body_width=13, max_height=190)
+        elif scene_id == "sq03":
+            draw.rounded_rectangle((54, 506, 366, 748), radius=28, fill=(244, 246, 244, 224))
+            draw.rectangle((78, 556, 300, 558), fill=(170, 176, 170, 235))
+            draw_tag(draw, xy=(78, 578), text=copy["eyebrow"], fill=(155, 160, 153, 230), text_fill=(251, 250, 246, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(80, 632), title_font_size=30, body_font_size=18, title_fill=(62, 67, 64, 255), body_fill="#6D7471", title_width=8, body_width=11, max_height=102)
+        elif scene_id == "sq04":
+            draw.rounded_rectangle((40, 52, 742, 244), radius=32, fill=(242, 243, 241, 214))
+            draw.rectangle((70, 82, 82, 214), fill=(166, 168, 160, 230))
+            draw_tag(draw, xy=(98, 82), text=copy["eyebrow"], fill=(132, 138, 133, 235), text_fill=(251, 250, 246, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(100, 144), title_font_size=34, body_font_size=20, title_fill=(61, 64, 62, 255), body_fill="#6D7470", title_width=12, body_width=19, max_height=78)
+        else:
+            draw.rounded_rectangle((58, 72, 322, 304), radius=34, fill=(243, 245, 244, 214))
+            draw_tag(draw, xy=(84, 98), text=copy["eyebrow"], fill=(92, 100, 97, 236), text_fill=(248, 249, 247, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(84, 158), title_font_size=32, body_font_size=20, title_fill=(61, 64, 62, 255), body_fill="#69716E", title_width=7, body_width=9, max_height=116)
+        return Image.alpha_composite(canvas, overlay).convert("RGB")
 
     if scene_id == "sq01":
         draw.rounded_rectangle((36, 40, 410, 270), radius=34, fill=(245, 240, 233, 212))
@@ -819,10 +958,37 @@ def render_square_layout(img: Image.Image, scene_id: str) -> Image.Image:
 
 
 def render_portrait_layout(img: Image.Image, scene_id: str) -> Image.Image:
-    copy = PORTRAIT_LAYOUT_COPY[scene_id]
+    product_name = CURRENT_PRODUCT_NAME
+    copy = get_portrait_layout_copy(product_name)[scene_id]
     canvas = img.convert("RGBA")
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+
+    if product_name == "3号品":
+        if scene_id == "pt01":
+            draw.rounded_rectangle((54, 62, 564, 318), radius=34, fill=(240, 243, 242, 214))
+            draw_tag(draw, xy=(82, 88), text=copy["eyebrow"], fill=(97, 105, 101, 235), text_fill=(250, 249, 246, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(84, 150), title_font_size=60, body_font_size=27, title_fill=(60, 64, 62, 255), body_fill="#6D7470", title_width=8, body_width=14, max_height=132)
+        elif scene_id == "pt02":
+            draw.rounded_rectangle((58, 806, 524, 1148), radius=34, fill=(239, 242, 241, 220))
+            draw.rectangle((86, 896, 98, 1092), fill=(182, 188, 184, 230))
+            draw_tag(draw, xy=(108, 866), text=copy["eyebrow"], fill=(147, 154, 150, 245), text_fill=(250, 249, 246, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(110, 914), title_font_size=34, body_font_size=20, title_fill=(61, 65, 63, 255), body_fill="#717875", title_width=8, body_width=12, max_height=210)
+        elif scene_id == "pt03":
+            draw.rounded_rectangle((468, 70, 844, 344), radius=32, fill=(241, 244, 242, 220))
+            draw.rectangle((500, 100, 810, 104), fill=(180, 186, 180, 235))
+            draw_tag(draw, xy=(500, 124), text=copy["eyebrow"], fill=(180, 186, 180, 235), text_fill=(252, 250, 247, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(504, 186), title_font_size=36, body_font_size=21, title_fill=(61, 65, 63, 255), body_fill="#727975", title_width=7, body_width=9, max_height=118)
+        elif scene_id == "pt04":
+            draw.rounded_rectangle((64, 72, 424, 286), radius=34, fill=(243, 244, 242, 224))
+            draw.rounded_rectangle((92, 108, 266, 160), radius=24, fill=(103, 109, 106, 236))
+            draw.text((120, 120), copy["eyebrow"], font=load_font(24), fill=(250, 249, 246, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(96, 170), title_font_size=36, body_font_size=20, title_fill=(60, 64, 62, 255), body_fill="#6D7470", title_width=8, body_width=12, max_height=108)
+        else:
+            draw.rounded_rectangle((52, 940, 846, 1142), radius=30, fill=(244, 246, 244, 214))
+            draw_tag(draw, xy=(86, 972), text=copy["eyebrow"], fill=(92, 99, 96, 236), text_fill=(248, 249, 247, 255))
+            draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(250, 972), title_font_size=36, body_font_size=20, title_fill=(61, 64, 62, 255), body_fill="#707774", title_width=10, body_width=16, max_height=140)
+        return Image.alpha_composite(canvas, overlay).convert("RGB")
 
     if scene_id == "pt01":
         draw.rounded_rectangle((52, 60, 560, 312), radius=34, fill=(248, 243, 236, 210))
@@ -852,11 +1018,46 @@ def render_portrait_layout(img: Image.Image, scene_id: str) -> Image.Image:
 
 
 def render_detail_layout(src: Path, scene_id: str, out_path: Path) -> None:
-    copy = DETAIL_LAYOUT_COPY[scene_id]
+    product_name = CURRENT_PRODUCT_NAME
+    copy = get_detail_layout_copy(product_name)[scene_id]
     hero = fit_image_to_canvas(src, (750, 1200))
     canvas = hero.convert("RGBA")
     overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+
+    if product_name == "3号品":
+        if scene_id == "dt01":
+            draw.rounded_rectangle((34, 824, 716, 1178), radius=38, fill=(241, 244, 243, 210))
+            draw.text((62, 848), copy["section"], font=load_font(28), fill=(147, 155, 151, 255))
+            draw.text((116, 852), copy["kicker"], font=load_font(24), fill=(116, 124, 121, 255))
+            end_y = draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(60, 900), title_font_size=35, body_font_size=20, title_fill=(60, 64, 62, 255), body_fill="#6E7572", title_width=12, body_width=21, max_height=120)
+            draw_detail_bullets(draw, copy["bullets"], (60, end_y), 18, font_size=20, step=48, text_fill="#6E7572", bullet_fill=(164, 170, 166, 255))
+        elif scene_id == "dt02":
+            draw.rounded_rectangle((44, 790, 706, 1174), radius=34, fill=(240, 242, 240, 220))
+            draw.text((72, 818), copy["section"], font=load_font(28), fill=(132, 140, 136, 255))
+            draw.text((126, 822), copy["kicker"], font=load_font(24), fill=(111, 118, 114, 255))
+            end_y = draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(70, 872), title_font_size=37, body_font_size=21, title_fill=(72, 77, 74, 255), body_fill="#66706B", title_width=12, body_width=20, max_height=132)
+            draw_detail_bullets(draw, copy["bullets"], (72, end_y), 16, font_size=21, step=50, text_fill="#66706B", bullet_fill=(148, 156, 151, 255))
+        elif scene_id == "dt03":
+            draw.rounded_rectangle((44, 60, 362, 516), radius=34, fill=(242, 245, 244, 214))
+            draw.text((74, 86), copy["section"], font=load_font(28), fill=(147, 155, 151, 255))
+            draw.text((128, 90), copy["kicker"], font=load_font(24), fill=(116, 124, 121, 255))
+            end_y = draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(74, 142), title_font_size=32, body_font_size=20, title_fill=(60, 64, 62, 255), body_fill="#6E7572", title_width=7, body_width=9, max_height=138)
+            draw_detail_bullets(draw, copy["bullets"], (76, end_y + 10), 8, text_fill="#6E7572", bullet_fill=(166, 171, 167, 255))
+        elif scene_id == "dt04":
+            draw.rounded_rectangle((44, 66, 496, 430), radius=34, fill=(243, 245, 244, 214))
+            draw.text((74, 94), copy["section"], font=load_font(28), fill=(147, 155, 151, 255))
+            draw.text((128, 98), copy["kicker"], font=load_font(24), fill=(116, 124, 121, 255))
+            end_y = draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(74, 150), title_font_size=29, body_font_size=19, title_fill=(61, 65, 63, 255), body_fill="#6D7470", title_width=10, body_width=13, max_height=112)
+            draw_detail_bullets(draw, copy["bullets"], (76, end_y + 6), 10, font_size=21, step=52, text_fill="#6D7470", bullet_fill=(166, 171, 167, 255))
+        else:
+            draw.rounded_rectangle((34, 44, 716, 392), radius=36, fill=(244, 246, 244, 208))
+            draw.text((62, 64), copy["section"], font=load_font(30), fill=(147, 155, 151, 255))
+            draw.text((120, 68), copy["kicker"], font=load_font(26), fill=(116, 124, 121, 255))
+            end_y = draw_text_block(draw, title=copy["title"], body=copy["body"], origin=(60, 120), title_font_size=38, body_font_size=21, title_fill=(61, 65, 63, 255), body_fill="#6D7470", title_width=13, body_width=20, max_height=132)
+            draw_detail_bullets(draw, copy["bullets"], (60, end_y + 6), 16, font_size=20, step=50, text_fill="#6D7470", bullet_fill=(166, 171, 167, 255))
+        Image.alpha_composite(canvas, overlay).convert("RGB").save(out_path, quality=95)
+        return
 
     if scene_id == "dt01":
         draw.rounded_rectangle((34, 824, 716, 1178), radius=38, fill=(247, 241, 233, 210))
@@ -949,6 +1150,8 @@ def update_workbook(ctx: ProductContext) -> None:
 
 
 def publish_product(product_name: str) -> list[Path]:
+    global CURRENT_PRODUCT_NAME
+    CURRENT_PRODUCT_NAME = product_name
     payload, cache = load_manifest(product_name)
     ctx = read_context(product_name)
     scenes = payload["scenes"]

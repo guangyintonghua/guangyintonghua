@@ -7,6 +7,12 @@ browser/downloads/
 browser/mcp-output/
 .playwright-mcp/
 data/visual-learning/
+桌布自动生图工作流/输出/
+桌布自动生图工作流/产品素材/*/白底图/
+桌布自动生图工作流/产品素材/*/1比1主图/
+桌布自动生图工作流/产品素材/*/3比4主图/
+桌布自动生图工作流/产品素材/*/详情页/
+scripts/__pycache__/
 *.png
 *.jpg
 *.jpeg
