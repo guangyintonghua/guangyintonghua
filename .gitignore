@@ -18,3 +18,7 @@ scripts/__pycache__/
 *.jpeg
 *.webp
 *.pdf
+*.db
+**/__pycache__/
+小学考试软件/data/logs/
+小学考试软件/data/config.json
