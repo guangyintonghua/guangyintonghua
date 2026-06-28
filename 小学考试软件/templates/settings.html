@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}设置 - 小学数学智能练习{% endblock %}
+
+{% block content %}
+<div class="page-title">⚙️ 系统设置</div>
+
+<div class="grid-2 gap-16">
+  <!-- 学生管理 -->
+  <div>
+    <div class="card mb-16">
+      <div class="section-title">学生管理</div>
+      <div id="student-list" class="mb-16"></div>
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <div class="text-sm text-secondary mb-8">添加新学生</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="form-control" id="new-name" placeholder="姓名">
+          <select class="form-control" id="new-grade">
+            <option>一年级</option><option>二年级</option><option selected>三年级</option>
+            <option>四年级</option><option>五年级</option><option>六年级</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addStudent()">+ 添加学生</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API 配置 -->
+  <div>
+    <div class="card mb-16">
+      <div class="section-title">API 配置</div>
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <input class="form-control" id="api-key" type="password" placeholder="sk-xxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label class="form-label">API 地址</label>
+        <input class="form-control" id="api-base" placeholder="https://api.deepseek.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">对话模型</label>
+        <input class="form-control" id="model-chat" placeholder="deepseek-chat">
+      </div>
+      <button class="btn btn-primary" onclick="saveAPI()">保存 API 配置</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">默认配置</div>
+      <div class="form-group">
+        <label class="form-label">默认年级</label>
+        <select class="form-control" id="def-grade">
+          <option>一年级</option><option>二年级</option><option>三年级</option>
+          <option>四年级</option><option>五年级</option><option>六年级</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">地区 / 教材版本</label>
+        <select class="form-control" id="def-region">
+          <option>全国通用</option><option>北京</option><option>上海</option>
+          <option>广东</option><option>浙江</option><option>江苏</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="saveGeneral()">保存默认配置</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allStudents = [];
+
+async function init() {
+  const [cfg, students] = await Promise.all([
+    apiFetch("/api/settings/full"),
+    apiFetch("/api/students"),
+  ]);
+  allStudents = students;
+
+  document.getElementById("api-key").value   = cfg.api_key || "";
+  document.getElementById("api-base").value  = cfg.api_base_url || "https://api.deepseek.com";
+  document.getElementById("model-chat").value= cfg.model_chat || "deepseek-chat";
+  document.getElementById("def-grade").value = cfg.default_grade || "三年级";
+  document.getElementById("def-region").value= cfg.region || "全国通用";
+
+  renderStudentList(students, cfg.default_student_id);
+}
+
+function renderStudentList(students, currentId) {
+  const el = document.getElementById("student-list");
+  if (students.length === 0) {
+    el.innerHTML = '<div class="text-hint text-sm">暂无学生，请添加</div>';
+    return;
+  }
+  el.innerHTML = students.map(s => `
+    <div style="display:flex;align-items:center;padding:10px;border-radius:8px;
+      background:${String(s.id) === String(currentId) ? "var(--primary-light)" : "var(--body-bg)"};
+      margin-bottom:8px">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:14px">
+          ${String(s.id) === String(currentId) ? "✓ " : ""}${s.name}
+        </div>
+        <div class="text-hint text-sm">${s.grade}</div>
+      </div>
+      <button class="btn btn-sm btn-outline" onclick="selectStudent(${s.id})"
+        ${String(s.id) === String(currentId) ? "disabled" : ""}>
+        ${String(s.id) === String(currentId) ? "当前" : "选择"}
+      </button>
+      <button class="btn btn-sm btn-danger" style="margin-left:6px" onclick="deleteStudent(${s.id})">删除</button>
+    </div>
+  `).join("");
+}
+
+async function selectStudent(id) {
+  await apiFetch("/api/settings", {method:"PUT", body: JSON.stringify({default_student_id: String(id)})});
+  toast("已切换学生", "success");
+  init();
+}
+
+async function addStudent() {
+  const name  = document.getElementById("new-name").value.trim();
+  const grade = document.getElementById("new-grade").value;
+  if (!name) { toast("请输入姓名", "error"); return; }
+  await apiFetch("/api/students", {method:"POST", body: JSON.stringify({name, grade})});
+  document.getElementById("new-name").value = "";
+  toast("添加成功", "success");
+  init();
+}
+
+async function deleteStudent(id) {
+  if (!confirm("确定删除该学生？历史数据不会删除。")) return;
+  await apiFetch(`/api/students/${id}`, {method:"DELETE"});
+  toast("已删除", "info");
+  init();
+}
+
+async function saveAPI() {
+  const body = {
+    api_key:      document.getElementById("api-key").value.trim(),
+    api_base_url: document.getElementById("api-base").value.trim(),
+    model_chat:   document.getElementById("model-chat").value.trim(),
+  };
+  await apiFetch("/api/settings", {method:"PUT", body: JSON.stringify(body)});
+  toast("API 配置已保存", "success");
+}
+
+async function saveGeneral() {
+  const body = {
+    default_grade: document.getElementById("def-grade").value,
+    region:        document.getElementById("def-region").value,
+  };
+  await apiFetch("/api/settings", {method:"PUT", body: JSON.stringify(body)});
+  toast("配置已保存", "success");
+}
+
+init();
+</script>
+{% endblock %}

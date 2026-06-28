@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}首页 - 小学数学智能练习{% endblock %}
+
+{% block content %}
+<div class="page-title">学习中心</div>
+
+<!-- 统计卡片 -->
+<div class="grid-4 mb-16" id="stat-cards">
+  <div class="card card-sm" style="border-left:4px solid var(--primary)">
+    <div class="text-hint text-sm mb-8">本周练习</div>
+    <div style="font-size:28px;font-weight:700;color:var(--primary)" id="stat-exams">--</div>
+    <div class="text-hint text-sm">套试卷</div>
+  </div>
+  <div class="card card-sm" style="border-left:4px solid var(--success)">
+    <div class="text-hint text-sm mb-8">平均得分</div>
+    <div style="font-size:28px;font-weight:700;color:var(--success)" id="stat-avg">--</div>
+    <div class="text-hint text-sm">分</div>
+  </div>
+  <div class="card card-sm" style="border-left:4px solid var(--warning)">
+    <div class="text-hint text-sm mb-8">连续打卡</div>
+    <div style="font-size:28px;font-weight:700;color:var(--warning)" id="stat-streak">--</div>
+    <div class="text-hint text-sm">天</div>
+  </div>
+  <div class="card card-sm" style="border-left:4px solid var(--purple)">
+    <div class="text-hint text-sm mb-8">累计积分</div>
+    <div style="font-size:28px;font-weight:700;color:var(--purple)" id="stat-points">--</div>
+    <div class="text-hint text-sm">分</div>
+  </div>
+</div>
+
+<div class="grid-2 gap-16">
+  <!-- 快速操作 -->
+  <div>
+    <div class="card mb-16">
+      <div class="section-title">快速开始</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <a href="/exam" class="btn btn-primary btn-lg w-full" style="justify-content:center">
+          ✏️ &nbsp;生成新试卷
+        </a>
+        <a href="/submit" class="btn btn-outline btn-lg w-full" style="justify-content:center">
+          📷 &nbsp;上传批改
+        </a>
+        <a href="/speed-calc" class="btn btn-secondary btn-lg w-full" style="justify-content:center">
+          ⚡ &nbsp;口算速练
+        </a>
+      </div>
+    </div>
+
+    <!-- 薄弱知识点 -->
+    <div class="card">
+      <div class="section-title">薄弱知识点</div>
+      <div id="weak-kps">
+        <div class="empty-state" style="padding:24px">
+          <div>暂无数据，完成练习后显示</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 最近记录 -->
+  <div>
+    <div class="card">
+      <div class="section-title">最近练习记录</div>
+      <div id="recent-list">
+        <div class="empty-state">
+          <div class="icon">📋</div>
+          <div>暂无练习记录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+apiFetch("/api/stats").then(data => {
+  if (!data) return;
+  document.getElementById("stat-exams").textContent  = data.exam_count ?? 0;
+  document.getElementById("stat-avg").textContent    = data.avg_score ?? 0;
+  document.getElementById("stat-streak").textContent = data.streak ?? 0;
+  document.getElementById("stat-points").textContent = data.total_points ?? 0;
+
+  // 最近记录
+  const subs = data.recent_submissions || [];
+  const list = document.getElementById("recent-list");
+  if (subs.length === 0) return;
+  list.innerHTML = `<table class="table">
+    <thead><tr><th>试卷</th><th>得分</th><th>日期</th><th></th></tr></thead>
+    <tbody>${subs.map(s => {
+      const rate = s.total_score > 0 ? s.score / s.total_score : 0;
+      const color = scoreColor(rate);
+      return `<tr>
+        <td>${s.title || "未命名"}<br><span class="text-hint text-sm">${s.grade}${s.semester||""}</span></td>
+        <td><span style="color:${color};font-weight:700">${s.score}</span>
+            <span class="text-hint">/${s.total_score}</span></td>
+        <td class="text-hint text-sm">${fmtDate(s.submitted_at)}</td>
+        <td><a href="/report?sub_id=${s.id}" class="btn btn-sm btn-outline">报告</a></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+
+  // 薄弱知识点
+  const weaks = data.weak_kps || [];
+  const wEl = document.getElementById("weak-kps");
+  if (weaks.length === 0) {
+    wEl.innerHTML = '<div style="color:var(--text-hint);font-size:13px">暂无薄弱知识点 🎉</div>';
+    return;
+  }
+  wEl.innerHTML = weaks.map(w => `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:13px;font-weight:500">${w.knowledge_point}</div>
+        <div style="font-size:11px;color:var(--text-hint)">正确率 ${Math.round(w.rate*100)}%</div>
+      </div>
+      <a href="/practice?kp=${encodeURIComponent(w.knowledge_point)}" class="btn btn-sm btn-danger">去专练</a>
+    </div>
+    <div class="progress-bar mb-8">
+      <div class="progress-fill" style="width:${Math.round(w.rate*100)}%;background:${scoreColor(w.rate)}"></div>
+    </div>
+  `).join("");
+}).catch(() => {});
+</script>
+{% endblock %}

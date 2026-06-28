@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}分析报告 - 小学数学智能练习{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+  <div class="page-title" style="margin:0">📊 分析报告</div>
+  <select class="form-control" id="sel-sub" style="max-width:280px" onchange="loadReport(this.value)">
+    <option value="">-- 选择记录 --</option>
+  </select>
+</div>
+
+<div id="report-body">
+  <div class="empty-state">
+    <div class="icon">📊</div>
+    <div>选择批改记录查看报告</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function init() {
+  const subs = await apiFetch("/api/submissions");
+  const sel = document.getElementById("sel-sub");
+  subs.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = `${s.title} · ${s.score}/${s.total_score}分 · ${fmtDate(s.submitted_at)}`;
+    sel.appendChild(opt);
+  });
+  const id = getParam("sub_id");
+  if (id) { sel.value = id; loadReport(id); }
+}
+
+async function loadReport(sub_id) {
+  if (!sub_id) return;
+  setParam("sub_id", sub_id);
+  const sub = await apiFetch(`/api/submissions/${sub_id}`);
+  renderReport(sub);
+}
+
+function renderReport(sub) {
+  const graded = sub.graded_results || [];
+  const kp_stats = sub.kp_stats || {};
+  const analysis = sub.analysis || {};
+  const score = sub.score, total = sub.total_score;
+  const rate = total > 0 ? score / total : 0;
+  const correct = graded.filter(q => q.grading?.is_correct).length;
+
+  const summary = analysis.summary || {};
+  const levelColors = {"优秀":"var(--success)","良好":"var(--primary)","中等":"var(--warning)","待提高":"var(--danger)"};
+  const levelColor = levelColors[summary.level] || "var(--primary)";
+
+  document.getElementById("report-body").innerHTML = `
+    <!-- 得分概览 -->
+    <div class="grid-4 mb-16">
+      <div class="card card-sm" style="text-align:center;border-top:4px solid ${levelColor}">
+        <div style="font-size:48px;font-weight:700;color:${levelColor}">${score}</div>
+        <div class="text-hint text-sm">/ ${total} 分</div>
+        ${summary.level ? `<div class="badge mt-8" style="background:${levelColor}22;color:${levelColor}">${summary.level}</div>` : ""}
+      </div>
+      <div class="card card-sm" style="text-align:center">
+        <div style="font-size:36px;font-weight:700;color:var(--primary)">${correct}</div>
+        <div class="text-hint text-sm">/ ${graded.length} 题正确</div>
+        <div class="text-sm mt-8" style="color:var(--primary)">${Math.round(rate*100)}% 正确率</div>
+      </div>
+      <div class="card card-sm" style="grid-column:span 2">
+        <div class="text-hint text-sm mb-8">AI 综合评价</div>
+        <div style="font-size:14px;line-height:1.7;color:var(--text)">
+          ${summary.overall_comment || "暂无评价，AI 分析可能仍在生成中..."}
+        </div>
+      </div>
+    </div>
+
+    <!-- 知识点掌握 + 题目明细 -->
+    <div class="grid-2 gap-16 mb-16">
+      <div class="card">
+        <div class="section-title">知识点掌握度</div>
+        <canvas id="kp-chart" height="180"></canvas>
+        <div id="kp-list" class="mt-16"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">答题明细</div>
+        <div style="max-height:360px;overflow-y:auto">
+        <table class="table">
+          <thead><tr><th>题号</th><th>题型</th><th>得分</th><th>错误类型</th></tr></thead>
+          <tbody>
+            ${graded.map(q => {
+              const g = q.grading || {};
+              const ok = g.is_correct;
+              return `<tr>
+                <td>第${q.id}题</td>
+                <td>${q.type}</td>
+                <td>
+                  <span style="color:${ok?'var(--success)':'var(--danger)'};font-weight:600">
+                    ${g.score_got ?? 0}
+                  </span>/${q.score}
+                </td>
+                <td class="text-sm text-hint">${g.error_type ? g.error_type : '✓'}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI 深度建议 -->
+    ${renderAnalysisSection(analysis)}
+
+    <!-- 操作按钮 -->
+    <div style="display:flex;gap:12px;margin-top:16px">
+      ${(analysis.weak_points_ranked || []).slice(0,1).map(w =>
+        `<a href="/practice?kp=${encodeURIComponent(w.knowledge_point)}"
+           class="btn btn-danger">🎯 专练「${w.knowledge_point}」</a>`
+      ).join("")}
+      <a href="/wrong-book" class="btn btn-outline">📖 查看错题本</a>
+      <a href="/exam" class="btn btn-secondary">✏️ 再来一套</a>
+    </div>
+  `;
+
+  // 绘制知识点图表
+  drawKpChart(kp_stats);
+
+  // 知识点列表
+  const kpListEl = document.getElementById("kp-list");
+  kpListEl.innerHTML = Object.entries(kp_stats).map(([kp, v]) => `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px">
+        <span>${kp}</span>
+        ${masteryBadge(v.rate)}
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${Math.round(v.rate*100)}%;background:${scoreColor(v.rate)}"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderAnalysisSection(analysis) {
+  if (!analysis || !analysis.study_suggestions) return "";
+  return `
+    <div class="grid-2 gap-16 mb-16">
+      <div class="card">
+        <div class="section-title">优势 & 薄弱</div>
+        ${(analysis.strengths||[]).length ? `
+          <div class="mb-16">
+            <div class="text-sm text-secondary mb-8">✅ 掌握良好</div>
+            ${analysis.strengths.map(s => `<div style="font-size:13px;margin-bottom:4px">· ${s}</div>`).join("")}
+          </div>` : ""}
+        ${(analysis.weak_points_ranked||[]).length ? `
+          <div>
+            <div class="text-sm text-secondary mb-8">⚠️ 需要加强</div>
+            ${analysis.weak_points_ranked.map(w => `
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div>
+                  <div style="font-size:13px;font-weight:500">${w.knowledge_point}</div>
+                  <div class="text-hint text-sm">${w.suggested_focus}</div>
+                </div>
+                <span class="badge ${w.urgency==='高'?'badge-red':w.urgency==='中'?'badge-orange':'badge-gray'}">${w.urgency}优先</span>
+              </div>
+            `).join("")}
+          </div>` : ""}
+      </div>
+      <div class="card">
+        <div class="section-title">学习建议</div>
+        ${(analysis.study_suggestions||[]).map((s,i) => `
+          <div style="margin-bottom:14px;padding-left:12px;border-left:3px solid var(--primary)">
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">${s.title}</div>
+            <div class="text-hint text-sm">${s.detail}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function drawKpChart(kp_stats) {
+  const canvas = document.getElementById("kp-chart");
+  if (!canvas) return;
+  const labels = Object.keys(kp_stats);
+  const rates  = labels.map(k => Math.round(kp_stats[k].rate * 100));
+  const colors = rates.map(r => scoreColor(r/100));
+  new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{ data: rates, backgroundColor: colors, borderRadius: 6 }],
+    },
+    options: {
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { min: 0, max: 100, ticks: { callback: v => v+"%" } },
+        y: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+init();
+</script>
+{% endblock %}

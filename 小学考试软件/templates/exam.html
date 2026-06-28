@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}出题 - 小学数学智能练习{% endblock %}
+
+{% block content %}
+<div class="page-title">✏️ 生成试卷</div>
+
+<div class="grid-2 gap-16">
+  <!-- 左：配置面板 -->
+  <div>
+    <div class="card mb-16">
+      <div class="section-title">基本配置</div>
+      <div class="form-group">
+        <label class="form-label">年级</label>
+        <select class="form-control" id="sel-grade" onchange="onGradeChange()">
+          <option>一年级</option><option>二年级</option><option selected>三年级</option>
+          <option>四年级</option><option>五年级</option><option>六年级</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">学期</label>
+        <select class="form-control" id="sel-semester">
+          <option>上册</option><option>下册</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card mb-16">
+      <div class="section-title">知识点 <span class="text-hint text-sm" id="topic-count">（已选 0 个）</span></div>
+      <div id="topic-tree" style="max-height:280px;overflow-y:auto;font-size:13px"></div>
+    </div>
+
+    <div class="card mb-16">
+      <div class="section-title">题型配置</div>
+      <table style="width:100%;font-size:13px">
+        <thead>
+          <tr>
+            <th style="padding:4px 8px;text-align:left;color:var(--text-secondary)">题型</th>
+            <th style="padding:4px 8px;color:var(--text-secondary)">道数</th>
+            <th style="padding:4px 8px;color:var(--text-secondary)">每题分</th>
+          </tr>
+        </thead>
+        <tbody id="type-rows"></tbody>
+      </table>
+      <div class="mt-8 text-hint text-sm">预计总分：<span id="total-score-preview" style="font-weight:700;color:var(--primary)">0</span> 分</div>
+    </div>
+
+    <div class="card mb-16">
+      <div class="section-title">难度分布</div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="flex:1">
+          <label class="form-label">简单 <span id="lbl-easy">40</span>%</label>
+          <input type="range" min="0" max="100" value="40" id="rng-easy" oninput="syncDiff()" style="width:100%">
+        </div>
+        <div style="flex:1">
+          <label class="form-label">中等 <span id="lbl-medium">40</span>%</label>
+          <input type="range" min="0" max="100" value="40" id="rng-medium" oninput="syncDiff()" style="width:100%">
+        </div>
+        <div style="flex:1">
+          <label class="form-label">困难 <span id="lbl-hard">20</span>%</label>
+          <input type="range" min="0" max="100" value="20" id="rng-hard" disabled style="width:100%">
+        </div>
+      </div>
+      <div class="mt-8">
+        <button class="btn btn-sm btn-secondary" onclick="loadAdaptive()">🤖 AI自适应难度</button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-lg w-full" id="gen-btn" onclick="generateExam()">
+      🚀 生成试卷
+    </button>
+  </div>
+
+  <!-- 右：试卷预览 -->
+  <div>
+    <div class="card" style="min-height:400px">
+      <div id="preview-area">
+        <div class="empty-state">
+          <div class="icon">📝</div>
+          <div>配置完成后点击「生成试卷」</div>
+          <div class="text-hint text-sm mt-8">AI 将在 30-60 秒内生成试题</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TYPE_DEFS = [
+  {name:"选择题", defaultCount:5,  defaultScore:3},
+  {name:"判断题", defaultCount:5,  defaultScore:2},
+  {name:"填空题", defaultCount:8,  defaultScore:3},
+  {name:"计算题", defaultCount:6,  defaultScore:4},
+  {name:"应用题", defaultCount:3,  defaultScore:6},
+];
+
+// 初始化题型行
+function initTypeRows() {
+  const tbody = document.getElementById("type-rows");
+  tbody.innerHTML = TYPE_DEFS.map(t => `
+    <tr>
+      <td style="padding:6px 8px">${t.name}</td>
+      <td style="padding:6px 8px">
+        <input type="number" min="0" max="20" value="${t.defaultCount}"
+          data-type="${t.name}" data-field="count"
+          class="form-control" style="width:64px;padding:4px 8px"
+          oninput="updateScorePreview()">
+      </td>
+      <td style="padding:6px 8px">
+        <input type="number" min="1" max="20" value="${t.defaultScore}"
+          data-type="${t.name}" data-field="score"
+          class="form-control" style="width:64px;padding:4px 8px"
+          oninput="updateScorePreview()">
+      </td>
+    </tr>
+  `).join("");
+  updateScorePreview();
+}
+
+function updateScorePreview() {
+  let total = 0;
+  document.querySelectorAll("[data-field='count']").forEach(el => {
+    const scoreEl = document.querySelector(`[data-type="${el.dataset.type}"][data-field="score"]`);
+    total += (parseInt(el.value)||0) * (parseInt(scoreEl.value)||0);
+  });
+  document.getElementById("total-score-preview").textContent = total;
+}
+
+function syncDiff() {
+  const easy = parseInt(document.getElementById("rng-easy").value);
+  const mid  = parseInt(document.getElementById("rng-medium").value);
+  const hard = Math.max(0, 100 - easy - mid);
+  document.getElementById("lbl-easy").textContent   = easy;
+  document.getElementById("lbl-medium").textContent = mid;
+  document.getElementById("lbl-hard").textContent   = hard;
+  document.getElementById("rng-hard").value = hard;
+}
+
+// 加载知识点树
+async function onGradeChange() {
+  const grade = document.getElementById("sel-grade").value;
+  const semester = document.getElementById("sel-semester").value;
+  const tree = await apiFetch(`/api/knowledge-map?grade=${encodeURIComponent(grade)}&semester=${encodeURIComponent(semester)}`);
+  renderTopicTree(tree);
+}
+
+document.getElementById("sel-semester").addEventListener("change", onGradeChange);
+
+function renderTopicTree(tree) {
+  const container = document.getElementById("topic-tree");
+  container.innerHTML = Object.entries(tree).map(([unit, topics]) => `
+    <div style="margin-bottom:10px">
+      <div style="font-weight:600;color:var(--text-secondary);margin-bottom:4px;font-size:12px">${unit}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${topics.map(t => `
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;
+            background:var(--body-bg);padding:3px 8px;border-radius:6px;font-size:12px">
+            <input type="checkbox" value="${t}" onchange="updateTopicCount()"> ${t}
+          </label>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+function updateTopicCount() {
+  const n = document.querySelectorAll("#topic-tree input:checked").length;
+  document.getElementById("topic-count").textContent = `（已选 ${n} 个）`;
+}
+
+function getSelectedTopics() {
+  return [...document.querySelectorAll("#topic-tree input:checked")].map(el => el.value);
+}
+
+function getTypeCounts() {
+  const result = {};
+  document.querySelectorAll("[data-field='count']").forEach(el => {
+    const scoreEl = document.querySelector(`[data-type="${el.dataset.type}"][data-field="score"]`);
+    result[el.dataset.type] = [parseInt(el.value)||0, parseInt(scoreEl.value)||0];
+  });
+  return result;
+}
+
+async function loadAdaptive() {
+  const topics = getSelectedTopics().join(",");
+  const data = await apiFetch(`/api/adaptive-difficulty?topics=${encodeURIComponent(topics)}`);
+  document.getElementById("rng-easy").value   = data.easy;
+  document.getElementById("rng-medium").value = data.medium;
+  syncDiff();
+  toast("已根据历史表现自动调整难度", "info");
+}
+
+async function generateExam() {
+  const topics = getSelectedTopics();
+  if (topics.length === 0) {
+    toast("请至少选择一个知识点", "error"); return;
+  }
+  const typeCounts = getTypeCounts();
+  const totalQ = Object.values(typeCounts).reduce((s,[c]) => s+c, 0);
+  if (totalQ === 0) {
+    toast("请至少设置一种题型的数量", "error"); return;
+  }
+
+  const easy   = parseInt(document.getElementById("rng-easy").value);
+  const medium = parseInt(document.getElementById("rng-medium").value);
+  const hard   = 100 - easy - medium;
+
+  const btn = document.getElementById("gen-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 生成中...";
+
+  const preview = document.getElementById("preview-area");
+  preview.innerHTML = `<div style="text-align:center;padding:60px 24px">
+    <div class="spinner" style="width:36px;height:36px;margin:0 auto 16px"></div>
+    <div style="font-size:15px;font-weight:600">AI 正在生成试题...</div>
+    <div class="text-hint text-sm mt-8">通常需要 30-60 秒，请稍候</div>
+  </div>`;
+
+  try {
+    const {task_id} = await apiFetch("/api/exams/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        grade:       document.getElementById("sel-grade").value,
+        semester:    document.getElementById("sel-semester").value,
+        topics, type_counts: typeCounts, difficulty: [easy, medium, hard],
+      }),
+    });
+
+    pollTask(task_id, result => {
+      btn.disabled = false;
+      btn.textContent = "🚀 生成试卷";
+      renderExamPreview(result);
+    }, err => {
+      btn.disabled = false;
+      btn.textContent = "🚀 生成试卷";
+      preview.innerHTML = `<div class="empty-state"><div class="icon">❌</div><div>生成失败：${err}</div></div>`;
+      toast("生成失败：" + err, "error");
+    });
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = "🚀 生成试卷";
+    toast(e.message, "error");
+  }
+}
+
+function renderExamPreview(result) {
+  const {exam_id, questions, total_score} = result;
+  const preview = document.getElementById("preview-area");
+  preview.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <div style="font-size:16px;font-weight:700">试卷生成成功 ✅</div>
+        <div class="text-hint text-sm">共 ${questions.length} 题 · 总分 ${total_score} 分</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="/api/exams/${exam_id}/pdf" target="_blank" class="btn btn-secondary btn-sm">📄 下载PDF</a>
+        <a href="/submit?exam_id=${exam_id}" class="btn btn-primary btn-sm">去批改 →</a>
+      </div>
+    </div>
+    <div style="max-height:500px;overflow-y:auto">
+      ${questions.map(q => `
+        <div style="margin-bottom:16px;padding:14px;background:var(--body-bg);border-radius:10px">
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <span class="badge badge-blue">${q.type}</span>
+            <span class="badge badge-gray">${q.knowledge_point}</span>
+            <span class="badge ${q.difficulty==='困难'?'badge-red':q.difficulty==='中等'?'badge-orange':'badge-green'}">${q.difficulty}</span>
+            <span class="badge badge-purple" style="margin-left:auto">${q.score}分</span>
+          </div>
+          <div style="margin-top:10px;font-size:14px;line-height:1.7">
+            <strong>第${q.id}题：</strong>${q.content}
+          </div>
+          ${q.options && q.options.length ? `<div style="margin-top:8px;font-size:13px;color:var(--text-secondary)">
+            ${q.options.map(o => `<div>${o}</div>`).join("")}
+          </div>` : ""}
+          <div style="margin-top:8px;font-size:12px;color:var(--text-hint)">
+            参考答案：<span style="color:var(--success);font-weight:600">${q.answer}</span>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+// 初始化
+initTypeRows();
+onGradeChange();
+</script>
+{% endblock %}

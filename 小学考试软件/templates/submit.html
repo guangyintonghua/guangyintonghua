@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}批改 - 小学数学智能练习{% endblock %}
+
+{% block content %}
+<div class="page-title">📷 上传作答</div>
+
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:20px">
+  <label class="form-label" style="margin:0">选择试卷：</label>
+  <select class="form-control" id="sel-exam" style="max-width:320px" onchange="onExamChange()">
+    <option value="">-- 请选择 --</option>
+  </select>
+</div>
+
+<div class="grid-2 gap-16">
+  <!-- 左：图片上传 -->
+  <div>
+    <div class="card mb-16">
+      <div class="section-title">上传答题照片</div>
+      <div class="upload-zone" id="upload-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)">
+        <div id="upload-placeholder">
+          <div style="font-size:40px">📷</div>
+          <div style="font-size:15px;font-weight:600;margin-top:8px">点击或拖拽上传照片</div>
+          <div class="text-hint text-sm mt-8">支持 JPG、PNG、BMP，建议清晰拍摄</div>
+        </div>
+        <img id="preview-img" style="display:none;max-height:300px;border-radius:8px">
+      </div>
+      <input type="file" id="file-input" accept="image/*" style="display:none" onchange="onFileSelected(event)">
+      <div id="quality-msg" class="mt-8 text-sm"></div>
+    </div>
+
+    <button class="btn btn-primary w-full" id="ocr-btn" onclick="doOCR()" disabled>
+      🔍 识别手写答案
+    </button>
+    <div id="ocr-loading" class="hidden" style="text-align:center;margin-top:12px">
+      <span class="spinner"></span> <span class="text-hint text-sm">识别中，请稍候...</span>
+    </div>
+  </div>
+
+  <!-- 右：答案确认 & 提交 -->
+  <div>
+    <div class="card" style="min-height:300px">
+      <div class="section-title">确认答案</div>
+      <div id="answer-hint" class="text-hint text-sm mb-16">上传照片并点击「识别手写答案」后显示</div>
+      <div id="answer-grid"></div>
+    </div>
+    <div id="grade-loading" class="hidden" style="text-align:center;margin-top:12px">
+      <span class="spinner"></span> <span class="text-hint text-sm">AI 批改中，通常需要 30-60 秒...</span>
+    </div>
+    <button class="btn btn-success btn-lg w-full mt-16" id="submit-btn" onclick="doSubmit()" disabled>
+      ✅ 开始批改 →
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentExam = null;
+let tmpImagePath = "";
+
+// 加载试卷列表
+async function loadExams() {
+  const exams = await apiFetch("/api/exams");
+  const sel = document.getElementById("sel-exam");
+  exams.forEach(e => {
+    const opt = document.createElement("option");
+    opt.value = e.id;
+    opt.textContent = `${e.title}（${e.created_at.slice(0,10)}）`;
+    sel.appendChild(opt);
+  });
+  // URL 参数预选
+  const id = getParam("exam_id");
+  if (id) { sel.value = id; onExamChange(); }
+}
+
+async function onExamChange() {
+  const id = document.getElementById("sel-exam").value;
+  if (!id) { currentExam = null; return; }
+  currentExam = await apiFetch(`/api/exams/${id}`);
+  document.getElementById("answer-hint").textContent =
+    `已加载试卷：${currentExam.title}，共 ${currentExam.questions.length} 题`;
+}
+
+// 文件选择
+function onFileSelected(event) {
+  const file = event.target.files[0];
+  if (file) handleFile(file);
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById("upload-zone").classList.remove("drag-over");
+  const file = event.dataTransfer.files[0];
+  if (file) handleFile(file);
+}
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById("upload-placeholder").style.display = "none";
+    const img = document.getElementById("preview-img");
+    img.src = e.target.result;
+    img.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+  document.getElementById("ocr-btn").disabled = false;
+  document.getElementById("ocr-btn")._file = file;
+}
+
+async function doOCR() {
+  if (!currentExam) { toast("请先选择试卷", "error"); return; }
+  const file = document.getElementById("ocr-btn")._file;
+  if (!file) { toast("请先上传图片", "error"); return; }
+
+  document.getElementById("ocr-btn").disabled = true;
+  document.getElementById("ocr-loading").classList.remove("hidden");
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("question_count", currentExam.questions.length);
+
+  try {
+    const res = await fetch("/api/submissions/ocr", { method: "POST", body: form });
+    const data = await res.json();
+
+    const qMsg = document.getElementById("quality-msg");
+    qMsg.style.color = data.quality_ok ? "var(--success)" : "var(--warning)";
+    qMsg.textContent = (data.quality_ok ? "✓ " : "⚠ ") + data.quality_msg;
+    tmpImagePath = data.tmp_path || "";
+
+    pollTask(data.task_id, answers => {
+      document.getElementById("ocr-loading").classList.add("hidden");
+      document.getElementById("ocr-btn").disabled = false;
+      renderAnswerGrid(answers);
+      toast("识别完成，请核查答案后提交", "success");
+    }, err => {
+      document.getElementById("ocr-loading").classList.add("hidden");
+      document.getElementById("ocr-btn").disabled = false;
+      toast("识别失败：" + err, "error");
+    });
+  } catch(e) {
+    document.getElementById("ocr-loading").classList.add("hidden");
+    document.getElementById("ocr-btn").disabled = false;
+    toast(e.message, "error");
+  }
+}
+
+function renderAnswerGrid(answers) {
+  const grid = document.getElementById("answer-grid");
+  const questions = currentExam.questions;
+  grid.innerHTML = `
+    <div style="max-height:380px;overflow-y:auto">
+    <table class="table">
+      <thead><tr><th>题号</th><th>题目摘要</th><th>识别答案（可修改）</th></tr></thead>
+      <tbody>
+        ${questions.map(q => `
+          <tr>
+            <td>第${q.id}题</td>
+            <td class="text-hint" style="font-size:12px;max-width:160px">
+              ${q.content.slice(0,25)}${q.content.length>25?"...":""}
+            </td>
+            <td>
+              <input class="form-control" style="padding:4px 8px;font-size:13px"
+                id="ans-${q.id}"
+                value="${answers[String(q.id)] || ""}"
+                placeholder="未识别，手动填写">
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    </div>
+  `;
+  document.getElementById("answer-hint").style.display = "none";
+  document.getElementById("submit-btn").disabled = false;
+}
+
+async function doSubmit() {
+  if (!currentExam) { toast("请先选择试卷", "error"); return; }
+  const questions = currentExam.questions;
+  const answers = {};
+  questions.forEach(q => {
+    const el = document.getElementById(`ans-${q.id}`);
+    answers[String(q.id)] = el ? el.value.trim() : "";
+  });
+
+  document.getElementById("submit-btn").disabled = true;
+  document.getElementById("submit-btn").textContent = "批改中...";
+  document.getElementById("grade-loading").classList.remove("hidden");
+
+  try {
+    const {task_id} = await apiFetch("/api/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        exam_id: currentExam.id, answers, image_path: tmpImagePath
+      }),
+    });
+    pollTask(task_id, result => {
+      toast(`批改完成！得分 ${result.score}/${result.total}`, "success");
+      setTimeout(() => location.href = `/report?sub_id=${result.sub_id}`, 800);
+    }, err => {
+      document.getElementById("grade-loading").classList.add("hidden");
+      document.getElementById("submit-btn").disabled = false;
+      document.getElementById("submit-btn").textContent = "✅ 开始批改 →";
+      toast("批改失败：" + err, "error");
+    }, 2000);
+  } catch(e) {
+    document.getElementById("grade-loading").classList.add("hidden");
+    document.getElementById("submit-btn").disabled = false;
+    document.getElementById("submit-btn").textContent = "✅ 开始批改 →";
+    toast(e.message, "error");
+  }
+}
+
+loadExams();
+</script>
+{% endblock %}

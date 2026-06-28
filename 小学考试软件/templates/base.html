@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}小学数学智能练习系统{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-badge">🧮</div>
+    <div class="logo-text">
+      <div class="title">数学练习</div>
+      <div class="sub">人教版 · 智能分析</div>
+    </div>
+  </div>
+
+  <div class="nav-items">
+    <a class="nav-item" href="/">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#5B8DEF,#3867D6)">🏠</div>
+      首页
+    </a>
+    <a class="nav-item" href="/exam">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#FD9644,#E67E22)">✏️</div>
+      出题
+    </a>
+    <a class="nav-item" href="/submit">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#B07FFF,#8854D0)">📷</div>
+      批改
+    </a>
+    <a class="nav-item" href="/report">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#26DE81,#20BF6B)">📊</div>
+      分析
+    </a>
+    <a class="nav-item" href="/practice">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#FC5C65,#C0392B)">🎯</div>
+      专练
+    </a>
+    <a class="nav-item" href="/wrong-book">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#2BCBBA,#0FB9B1)">📖</div>
+      错题本
+    </a>
+    <a class="nav-item" href="/speed-calc">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#FDCB6E,#F9CA24)">⚡</div>
+      口算
+    </a>
+    <a class="nav-item" href="/settings">
+      <div class="nav-icon" style="background:linear-gradient(135deg,#A5B1C2,#778CA3)">⚙️</div>
+      设置
+    </a>
+  </div>
+
+  <div class="sidebar-footer" id="sidebar-student">
+    <div style="font-size:11px;color:var(--text-hint);margin-bottom:4px">当前学生</div>
+    <div id="student-name-label" style="font-weight:600">加载中...</div>
+    <div id="student-info-label" style="color:var(--text-hint);font-size:12px"></div>
+  </div>
+</nav>
+
+<!-- 主内容 -->
+<main id="main">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Toast 容器 -->
+<div id="toast-container"></div>
+
+<script src="/static/js/app.js"></script>
+<script>
+  // 加载侧边栏学生信息
+  apiFetch("/api/students/current").then(s => {
+    if (s) {
+      document.getElementById("student-name-label").textContent = "👤 " + s.name;
+      document.getElementById("student-info-label").textContent = s.grade + " · " + s.points + "分";
+    } else {
+      document.getElementById("student-name-label").textContent = "未选择学生";
+      document.getElementById("student-info-label").textContent = "请到设置中配置";
+    }
+  }).catch(() => {
+    document.getElementById("student-name-label").textContent = "未选择学生";
+  });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}错题本 - 小学数学智能练习{% endblock %}
+
+{% block content %}
+<div class="page-title">📖 错题本</div>
+
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+  <select class="form-control" id="kp-filter" style="max-width:220px" onchange="loadWrong()">
+    <option value="">全部知识点</option>
+  </select>
+  <span id="wrong-count" class="text-hint text-sm"></span>
+  <div style="margin-left:auto">
+    <button class="btn btn-primary btn-sm" id="practice-btn" onclick="practiceWeak()" style="display:none">
+      🎯 专练当前知识点
+    </button>
+  </div>
+</div>
+
+<div id="wrong-list">
+  <div class="empty-state">
+    <div class="icon">📖</div>
+    <div>暂无错题记录</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function init() {
+  const kps = await apiFetch("/api/wrong-book/kps");
+  const sel = document.getElementById("kp-filter");
+  kps.forEach(kp => {
+    const opt = document.createElement("option");
+    opt.value = kp; opt.textContent = kp;
+    sel.appendChild(opt);
+  });
+  loadWrong();
+}
+
+async function loadWrong() {
+  const kp = document.getElementById("kp-filter").value;
+  const url = "/api/wrong-book" + (kp ? `?kp=${encodeURIComponent(kp)}` : "");
+  const wrongs = await apiFetch(url);
+
+  document.getElementById("wrong-count").textContent = `共 ${wrongs.length} 道错题`;
+  document.getElementById("practice-btn").style.display = kp ? "inline-flex" : "none";
+
+  const list = document.getElementById("wrong-list");
+  if (wrongs.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="icon">🎉</div>
+      <div>${kp ? "该知识点暂无错题" : "暂无错题记录，继续保持！"}</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = wrongs.map(w => {
+    const g = w.grading || {};
+    return `
+      <div class="card mb-16">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+          <span class="badge badge-red">✗ 错误</span>
+          <span class="badge badge-blue">${w.type}</span>
+          <span class="badge badge-purple">${w.knowledge_point}</span>
+          <span class="text-hint text-sm" style="margin-left:auto">${fmtDate(w.submitted_at)} · ${w.exam_title}</span>
+        </div>
+        <div style="font-size:14px;line-height:1.8;margin-bottom:10px">
+          <strong>题目：</strong>${w.content}
+        </div>
+        ${w.options && w.options.length ? `
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">
+            ${w.options.join("　")}
+          </div>` : ""}
+        <div style="display:flex;gap:24px;font-size:13px;margin-bottom:10px">
+          <div>学生答案：<span style="color:var(--danger);font-weight:600">${w.student_answer || "未作答"}</span></div>
+          <div>正确答案：<span style="color:var(--success);font-weight:600">${w.answer}</span></div>
+          ${g.error_type ? `<div>错误类型：<span class="badge badge-orange">${g.error_type}</span></div>` : ""}
+        </div>
+        ${g.error_desc ? `<div style="font-size:12px;color:var(--text-hint);margin-bottom:10px">
+          分析：${g.error_desc}
+        </div>` : ""}
+        <button class="btn btn-sm btn-secondary" onclick='playVoice(${JSON.stringify(w)})'>
+          🔊 听讲解
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function practiceWeak() {
+  const kp = document.getElementById("kp-filter").value;
+  if (kp) location.href = `/practice?kp=${encodeURIComponent(kp)}`;
+}
+
+async function playVoice(q) {
+  toast("生成语音中...", "info");
+  try {
+    const grade = (await apiFetch("/api/settings")).default_grade || "三年级";
+    const res = await fetch("/api/tts/question", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({question: q, grade}),
+    });
+    const blob = await res.blob();
+    new Audio(URL.createObjectURL(blob)).play();
+  } catch(e) { toast("语音失败：" + e.message, "error"); }
+}
+
+init();
+</script>
+{% endblock %}

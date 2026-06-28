@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}专项练习 - 小学数学智能练习{% endblock %}
+
+{% block content %}
+<div class="page-title">🎯 专项练习</div>
+
+<div class="card mb-16" style="max-width:600px">
+  <div class="section-title">选择知识点</div>
+  <div style="display:flex;gap:8px">
+    <input class="form-control" id="kp-input" placeholder="输入知识点，如：分数的认识">
+    <select class="form-control" id="kp-count" style="width:100px">
+      <option value="4">4题</option>
+      <option value="6" selected>6题</option>
+      <option value="8">8题</option>
+      <option value="10">10题</option>
+    </select>
+    <button class="btn btn-primary" onclick="startPractice()">生成</button>
+  </div>
+  <div id="kp-suggestions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+</div>
+
+<div id="practice-area"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentQuestions = [];
+let currentKp = "";
+
+async function loadSuggestedKps() {
+  const kps = await apiFetch("/api/wrong-book/kps");
+  const box = document.getElementById("kp-suggestions");
+  if (kps.length === 0) return;
+  box.innerHTML = '<span class="text-hint text-sm" style="align-self:center">薄弱知识点：</span>' +
+    kps.slice(0,6).map(kp =>
+      `<button class="btn btn-sm badge-orange" onclick="selectKp('${kp}')"
+         style="background:var(--body-bg);border:1px solid var(--border);cursor:pointer">${kp}</button>`
+    ).join("");
+}
+
+function selectKp(kp) {
+  document.getElementById("kp-input").value = kp;
+}
+
+async function startPractice() {
+  const kp = document.getElementById("kp-input").value.trim();
+  if (!kp) { toast("请输入知识点", "error"); return; }
+  const count = parseInt(document.getElementById("kp-count").value);
+  currentKp = kp;
+
+  const area = document.getElementById("practice-area");
+  area.innerHTML = `<div style="text-align:center;padding:60px">
+    <div class="spinner" style="width:36px;height:36px;margin:0 auto 16px"></div>
+    <div style="font-size:15px;font-weight:600">AI 正在生成练习题...</div>
+  </div>`;
+
+  try {
+    const {task_id} = await apiFetch("/api/practice/generate", {
+      method: "POST", body: JSON.stringify({knowledge_point: kp, count}),
+    });
+    pollTask(task_id, result => {
+      currentQuestions = (result.questions || []);
+      renderPractice(currentQuestions, kp);
+    }, err => {
+      area.innerHTML = `<div class="empty-state"><div class="icon">❌</div><div>${err}</div></div>`;
+    });
+  } catch(e) { toast(e.message, "error"); }
+}
+
+function renderPractice(questions, kp) {
+  const area = document.getElementById("practice-area");
+  area.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <span style="font-size:15px;font-weight:600">「${kp}」专练</span>
+        <span class="text-hint text-sm">&nbsp;共 ${questions.length} 题</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="startPractice()">重新生成</button>
+    </div>
+    ${questions.map((q, i) => renderQuestion(q, i)).join("")}
+    <button class="btn btn-primary btn-lg" onclick="gradeAll()" style="margin-top:8px">
+      ✅ 提交全部答案
+    </button>
+  `;
+}
+
+function renderQuestion(q, i) {
+  return `
+    <div class="card mb-16" id="q-card-${q.id}">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="font-weight:700;color:var(--primary)">第 ${i+1} 题</span>
+        <span class="badge badge-blue">${q.type}</span>
+        <span class="badge badge-gray">${q.knowledge_point}</span>
+      </div>
+      <div style="font-size:15px;line-height:1.8;margin-bottom:12px">${q.content}</div>
+      ${q.options && q.options.length ? `
+        <div style="margin-bottom:12px">
+          ${q.options.map(o => `
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;font-size:14px">
+              <input type="radio" name="q${q.id}" value="${o.charAt(0)}" style="margin:0"> ${o}
+            </label>
+          `).join("")}
+        </div>
+      ` : `
+        <input class="form-control" id="ans-input-${q.id}" placeholder="在此输入答案" style="max-width:300px">
+      `}
+      <div id="result-${q.id}"></div>
+    </div>
+  `;
+}
+
+async function gradeAll() {
+  for (const q of currentQuestions) {
+    let ans = "";
+    if (q.options && q.options.length) {
+      const checked = document.querySelector(`input[name="q${q.id}"]:checked`);
+      ans = checked ? checked.value : "";
+    } else {
+      ans = (document.getElementById(`ans-input-${q.id}`)?.value || "").trim();
+    }
+    await gradeOne(q, ans);
+  }
+  toast("已完成批改！", "success");
+}
+
+async function gradeOne(q, ans) {
+  const resEl = document.getElementById(`result-${q.id}`);
+  resEl.innerHTML = '<span class="spinner" style="width:16px;height:16px"></span>';
+  try {
+    const result = await apiFetch("/api/practice/grade", {
+      method: "POST", body: JSON.stringify({question: q, student_answer: ans || "未作答"}),
+    });
+    const ok = result.is_correct;
+    resEl.innerHTML = `
+      <div style="margin-top:12px;padding:12px;border-radius:8px;
+        background:${ok?"var(--success)":"var(--danger)"}18;
+        border-left:3px solid ${ok?"var(--success)":"var(--danger)"}">
+        <div style="font-weight:600;color:${ok?"var(--success)":"var(--danger)"}">
+          ${ok ? "✅ 正确！" : "❌ 错误"}
+        </div>
+        ${!ok ? `
+          <div class="text-sm mt-8">
+            正确答案：<strong>${q.answer}</strong><br>
+            ${result.error_desc ? "错误原因：" + result.error_desc : ""}
+          </div>
+        ` : ""}
+        <button class="btn btn-sm btn-secondary mt-8" onclick="playVoice(${JSON.stringify(q).replace(/"/g,'&quot;')})">
+          🔊 语音讲解
+        </button>
+      </div>
+    `;
+  } catch(e) {
+    resEl.innerHTML = `<div class="text-danger text-sm">${e.message}</div>`;
+  }
+}
+
+async function playVoice(q) {
+  toast("生成语音中...", "info");
+  try {
+    const grade = (await apiFetch("/api/settings")).default_grade || "三年级";
+    const res = await fetch("/api/tts/question", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({question: q, grade}),
+    });
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    new Audio(url).play();
+  } catch(e) { toast("语音生成失败：" + e.message, "error"); }
+}
+
+// URL 参数预填
+const urlKp = getParam("kp");
+if (urlKp) {
+  document.getElementById("kp-input").value = urlKp;
+  startPractice();
+}
+loadSuggestedKps();
+</script>
+{% endblock %}
