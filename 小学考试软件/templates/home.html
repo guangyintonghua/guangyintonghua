@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}首页 - 小学数学智能练习{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
 
 {% block content %}
 <div class="page-title">学习中心</div>
@@ -28,7 +31,7 @@
   </div>
 </div>
 
-<div class="grid-2 gap-16">
+<div class="grid-2 gap-16 mb-16">
   <!-- 快速操作 -->
   <div>
     <div class="card mb-16">
@@ -70,6 +73,12 @@
     </div>
   </div>
 </div>
+
+<!-- 本周活动图表 -->
+<div class="card">
+  <div class="section-title">本周做题趋势</div>
+  <canvas id="weekly-chart" height="80"></canvas>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -84,41 +93,70 @@ apiFetch("/api/stats").then(data => {
   // 最近记录
   const subs = data.recent_submissions || [];
   const list = document.getElementById("recent-list");
-  if (subs.length === 0) return;
-  list.innerHTML = `<table class="table">
-    <thead><tr><th>试卷</th><th>得分</th><th>日期</th><th></th></tr></thead>
-    <tbody>${subs.map(s => {
-      const rate = s.total_score > 0 ? s.score / s.total_score : 0;
-      const color = scoreColor(rate);
-      return `<tr>
-        <td>${s.title || "未命名"}<br><span class="text-hint text-sm">${s.grade}${s.semester||""}</span></td>
-        <td><span style="color:${color};font-weight:700">${s.score}</span>
-            <span class="text-hint">/${s.total_score}</span></td>
-        <td class="text-hint text-sm">${fmtDate(s.submitted_at)}</td>
-        <td><a href="/report?sub_id=${s.id}" class="btn btn-sm btn-outline">报告</a></td>
-      </tr>`;
-    }).join("")}</tbody>
-  </table>`;
+  if (subs.length > 0) {
+    list.innerHTML = `<table class="table">
+      <thead><tr><th>试卷</th><th>得分</th><th>日期</th><th></th></tr></thead>
+      <tbody>${subs.map(s => {
+        const rate = s.total_score > 0 ? s.score / s.total_score : 0;
+        const color = scoreColor(rate);
+        return `<tr>
+          <td>${s.title || "未命名"}<br><span class="text-hint text-sm">${s.grade}${s.semester||""}</span></td>
+          <td><span style="color:${color};font-weight:700">${s.score}</span>
+              <span class="text-hint">/${s.total_score}</span></td>
+          <td class="text-hint text-sm">${fmtDate(s.submitted_at)}</td>
+          <td><a href="/report?sub_id=${s.id}" class="btn btn-sm btn-outline">报告</a></td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+  }
 
   // 薄弱知识点
   const weaks = data.weak_kps || [];
   const wEl = document.getElementById("weak-kps");
   if (weaks.length === 0) {
     wEl.innerHTML = '<div style="color:var(--text-hint);font-size:13px">暂无薄弱知识点 🎉</div>';
-    return;
-  }
-  wEl.innerHTML = weaks.map(w => `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div>
-        <div style="font-size:13px;font-weight:500">${w.knowledge_point}</div>
-        <div style="font-size:11px;color:var(--text-hint)">正确率 ${Math.round(w.rate*100)}%</div>
+  } else {
+    wEl.innerHTML = weaks.map(w => `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:13px;font-weight:500">${w.knowledge_point}</div>
+          <div style="font-size:11px;color:var(--text-hint)">正确率 ${Math.round(w.rate*100)}%</div>
+        </div>
+        <a href="/practice?kp=${encodeURIComponent(w.knowledge_point)}" class="btn btn-sm btn-danger">去专练</a>
       </div>
-      <a href="/practice?kp=${encodeURIComponent(w.knowledge_point)}" class="btn btn-sm btn-danger">去专练</a>
-    </div>
-    <div class="progress-bar mb-8">
-      <div class="progress-fill" style="width:${Math.round(w.rate*100)}%;background:${scoreColor(w.rate)}"></div>
-    </div>
-  `).join("");
+      <div class="progress-bar mb-8">
+        <div class="progress-fill" style="width:${Math.round(w.rate*100)}%;background:${scoreColor(w.rate)}"></div>
+      </div>
+    `).join("");
+  }
+
+  // 本周做题趋势图
+  const daily = data.daily_list || [];
+  if (daily.length > 0) {
+    const labels = daily.map(d => d.date.slice(5)); // MM-DD
+    const values = daily.map(d => d.questions);
+    new Chart(document.getElementById("weekly-chart"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "做题数",
+          data: values,
+          backgroundColor: values.map(v => v > 0 ? "rgba(56,103,214,0.7)" : "rgba(200,210,230,0.4)"),
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 },
+               grid: { color: "rgba(0,0,0,.04)" } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
 }).catch(() => {});
 </script>
 {% endblock %}
