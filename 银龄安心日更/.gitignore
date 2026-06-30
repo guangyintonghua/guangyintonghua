@@ -1,0 +1,15 @@
+# Generated daily output
+output/
+
+# Local temporary files
+.cache/
+*.tmp
+
+# Media drafts
+*.wav
+*.mp3
+*.mp4
+*.srt
+*.png
+*.jpg
+*.jpeg
