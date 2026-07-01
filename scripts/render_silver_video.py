@@ -19,21 +19,30 @@ MIN_SEGMENT = 2.2
 MAX_SEGMENT = 4.8
 
 
+def _decode_output(raw: bytes) -> str:
+    for encoding in ("utf-8", "gbk", sys.getdefaultencoding()):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def run(cmd: list[str]) -> None:
-    completed = subprocess.run(cmd, capture_output=True, text=True)
+    completed = subprocess.run(cmd, capture_output=True)
     if completed.returncode != 0:
         raise RuntimeError(
-            f"Command failed: {' '.join(cmd)}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
+            f"Command failed: {' '.join(cmd)}\nSTDOUT:\n{_decode_output(completed.stdout)}\nSTDERR:\n{_decode_output(completed.stderr)}"
         )
 
 
 def run_output(cmd: list[str]) -> str:
-    completed = subprocess.run(cmd, capture_output=True, text=True)
+    completed = subprocess.run(cmd, capture_output=True)
     if completed.returncode != 0:
         raise RuntimeError(
-            f"Command failed: {' '.join(cmd)}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
+            f"Command failed: {' '.join(cmd)}\nSTDOUT:\n{_decode_output(completed.stdout)}\nSTDERR:\n{_decode_output(completed.stderr)}"
         )
-    return completed.stdout.strip()
+    return _decode_output(completed.stdout).strip()
 
 
 def ffprobe_duration(path: Path) -> float:
@@ -190,6 +199,10 @@ def wrap_text(text: str, width: int) -> str:
     return "\\N".join(lines[:2])
 
 
+def ffmpeg_filter_path(path: Path) -> str:
+    return path.as_posix().replace(":", "\\:").replace(",", "\\,")
+
+
 def make_ass(title: str, hook: str, narration: str, audio_duration: float, ass_path: Path) -> None:
     sentences = split_sentences(narration)
     total_units = sum(max(len(s), 8) for s in sentences)
@@ -231,7 +244,10 @@ Dialogue: 0,0:00:00.00,{format_ass_time(title_end)},Title,,0,0,0,,{{\\pos(420,26
 
 
 def mux_video(video_path: Path, audio_path: Path, ass_path: Path, output_path: Path, font_path: str) -> None:
-    subtitle_filter = f"subtitles='{ass_path.as_posix()}':fontsdir='{Path(font_path).parent.as_posix()}'"
+    subtitle_filter = (
+        f"subtitles=filename='{ffmpeg_filter_path(ass_path)}':"
+        f"fontsdir='{ffmpeg_filter_path(Path(font_path).parent)}'"
+    )
     run(
         [
             "ffmpeg",
