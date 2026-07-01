@@ -139,11 +139,40 @@ def normalize_clip(src: Path, dest: Path, start: float, duration: float) -> None
 
 
 def build_segments(video_files: list[Path], audio_duration: float, temp_dir: Path) -> list[Path]:
+    unique_count = len({path.resolve() for path in video_files})
+    if unique_count < 4:
+        raise RuntimeError(
+            "Need at least 4 distinct dynamic clips. Refuse to render repetitive video."
+        )
+
     segment_count = estimate_segments(audio_duration, len(video_files))
     segment_duration = max(MIN_SEGMENT, min(MAX_SEGMENT, audio_duration / segment_count))
     segments: list[Path] = []
+    usage_counts: dict[Path, int] = {path: 0 for path in video_files}
+    sequence: list[Path] = []
     for index in range(segment_count):
-        src = video_files[index % len(video_files)]
+        candidates = sorted(
+            video_files,
+            key=lambda path: (
+                usage_counts[path],
+                1 if sequence and path == sequence[-1] else 0,
+                str(path),
+            ),
+        )
+        src = None
+        for candidate in candidates:
+            if sequence and candidate == sequence[-1]:
+                continue
+            if usage_counts[candidate] >= 2:
+                continue
+            src = candidate
+            break
+        if src is None:
+            fallback = [candidate for candidate in candidates if not sequence or candidate != sequence[-1]]
+            if not fallback:
+                raise RuntimeError("Unable to build non-repetitive clip sequence.")
+            src = fallback[0]
+
         src_duration = ffprobe_duration(src)
         usable = max(segment_duration, min(src_duration, MAX_SEGMENT))
         start_max = max(src_duration - usable - 0.1, 0.0)
@@ -151,6 +180,8 @@ def build_segments(video_files: list[Path], audio_duration: float, temp_dir: Pat
         dest = temp_dir / f"segment_{index:02d}.mp4"
         normalize_clip(src, dest, start, min(usable, audio_duration))
         segments.append(dest)
+        sequence.append(src)
+        usage_counts[src] += 1
     return segments
 
 
