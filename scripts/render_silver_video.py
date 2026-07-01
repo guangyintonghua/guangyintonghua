@@ -275,10 +275,7 @@ Dialogue: 0,0:00:00.00,{format_ass_time(title_end)},Title,,0,0,0,,{{\\pos(420,26
 
 
 def mux_video(video_path: Path, audio_path: Path, ass_path: Path, output_path: Path, font_path: str) -> None:
-    subtitle_filter = (
-        f"subtitles=filename='{ffmpeg_filter_path(ass_path)}':"
-        f"fontsdir='{ffmpeg_filter_path(Path(font_path).parent)}'"
-    )
+    subtitle_filter = f"subtitles=filename='{ffmpeg_filter_path(ass_path)}'"
     run(
         [
             "ffmpeg",
